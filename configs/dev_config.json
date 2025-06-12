@@ -1,1 +1,5 @@
+{
+  "env": "development",
+  "debug": true
+}
 
