@@ -8,7 +8,7 @@ resource "aws_instance" "app_instance" {
     module.vpc,
     aws_security_group.web_sg
   ]
-
+  user_data = file("${path.module}/automate.sh")
   tags = {
     Name = "${var.stage}-${var.instance_name}"
   }
