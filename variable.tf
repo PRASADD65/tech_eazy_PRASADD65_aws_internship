@@ -17,4 +17,16 @@ variable "instance_name" {
 variable "vpc_name" {
   description = "Name of the VPC"
   type        = string
+  name        = "VPC"
+}
+
+variable "az_name" {
+  description = "Name of the az"
+  type        = string
+}
+
+variable "github_repo_url" {
+  description = "URL of the GitHub repository"
+  type        = string
+  default     = "" # Add your GitHub URL here
 }
