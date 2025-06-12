@@ -28,5 +28,5 @@ variable "az_name" {
 variable "github_repo_url" {
   description = "URL of the GitHub repository"
   type        = string
-  default     = "" # Add your GitHub URL here
+  default     = "https://github.com/techeazy-consulting/techeazy-devops.git" # Add your GitHub URL here
 }
