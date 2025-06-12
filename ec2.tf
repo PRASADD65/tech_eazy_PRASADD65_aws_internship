@@ -8,7 +8,10 @@ resource "aws_instance" "app_instance" {
     module.vpc,
     aws_security_group.web_sg
   ]
-  user_data = file("${path.module}/automate.sh")
+  user_data = templatefile("${path.module}/automate.sh.tmpl", {
+    config_file = "configs/${local.config_file}"
+  })
+
   tags = {
     Name = "${var.stage}-${var.instance_name}"
   }
