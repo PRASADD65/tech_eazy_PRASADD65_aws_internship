@@ -1,28 +1,27 @@
 module "vpc" {
-  source = "terraform-aws-modules/vpc/aws"
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "5.0.0" # It's good practice to pin module versions
 
-  name = "${var.stage}-${var.vpc_name}"
-  cidr = "10.0.0.0/16"
+  name = "${var.stage}-${var.vpc_name}" 
+  cidr = var.vpc_cidr_block # Using the variable for VPC CIDR
 
-  azs             = ["ap-south-2a", "ap-south-2a"]
-  private_subnets = ["10.0.1.0/24", "10.0.2.0/24"]
-  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24"]
+  public_subnets  = var.public_subnet_cidrs
+  private_subnets = var.private_subnet_cidrs
 
-  enable_nat_gateway     = false
-  enable_vpn_gateway     = false
-
-  igw_tags = {
-    Name = "${var.stage}-${var.vpc_name}-igw"
-  }
+  enable_nat_gateway  = false # Set to true if private subnets need outbound internet access
+  enable_vpn_gateway  = false
 
   tags = {
+    Name        = "${var.stage}-${var.vpc_name}-igw" # Adjust tag name for IGW
     Terraform   = "true"
     Environment = var.stage
   }
 }
 
 resource "aws_security_group" "web_sg" {
-  vpc_id = module.vpc.vpc_id
+  name        = "${var.stage}-${var.instance_name}-web-sg" # Adjust name to use instance_name for clarity
+  description = "Allow HTTP and SSH access to web instances"
+  vpc_id      = module.vpc.vpc_id
 
   ingress {
     from_port   = 22
@@ -35,17 +34,18 @@ resource "aws_security_group" "web_sg" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["0.0.0.0/0"] 
   }
 
+  # Egress rule to allow all outbound traffic (common for web servers)
   egress {
     from_port   = 0
     to_port     = 0
-    protocol    = "-1"
+    protocol    = "-1" # -1 means all protocols
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
-    Name = "${var.stage}-${var.vpc_name}-web-sg"
+    Name = "${var.stage}-${var.instance_name}-web-sg"
   }
 }
