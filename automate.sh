@@ -1,80 +1,143 @@
 #!/bin/bash
 
-# -------------------------------
-# Automate EC2 Setup & Deployment
-# -------------------------------
+# This script performs the core automation tasks using global Maven
+# and directly running the compiled JAR.
+#
+# It expects configuration variables like REPO_URL to be set
+# by a preceding script which is part of the user_data.
 
-# Variables passed from Terraform/template
-STAGE="${STAGE:-dev}"                         # Default to dev if not passed
-REPO_URL="${https://github.com/techeazy-consulting/techeazy-devops.git}"  # Default GitHub repo if not passed
+# --- ENVIRONMENT FIXES (kept for robustness, though global Maven is less sensitive) ---
+# Ensure HOME environment variable is set as early as possible in the overall user_data script (in ec2.tf).
+export HOME=/root
 
-echo "=== Stage: $STAGE"
-echo "=== Repo: $REPO_URL"
+# Explicitly set JAVA_HOME and update PATH for the apt-installed OpenJDK 21.
+export JAVA_HOME="/usr/lib/jvm/java-21-openjdk-amd64"
+export PATH="$JAVA_HOME/bin:$PATH"
 
-# Update and install dependencies
-apt update -y
-apt install -y wget curl unzip git gnupg software-properties-common
+set -e
+set -x
 
-# -------------------------------
-# Install Java 21
-# -------------------------------
-echo "Installing Java 21..."
-mkdir -p /opt/jdk
-cd /opt/jdk
-wget https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.tar.gz
-tar -xzf jdk-21_linux-x64_bin.tar.gz
-export JAVA_HOME=/opt/jdk/jdk-21.0.7
-export PATH=$JAVA_HOME/bin:$PATH
+echo "################################################################"
+echo "# Starting Core Application Setup Script                     #"
+echo "# (Executed via Terraform user_data)                         #"
+echo "################################################################"
 
-echo "Java Version: $(java --version)"
+# --- Define dynamic variables from sourced config or provide defaults ---
+REPO_URL="${REPO_URL:-https://github.com/techeazy-consulting/techeazy-devops.git}"
+REPO_DIR_NAME=$(basename "$REPO_URL" .git)
 
-# -------------------------------
-# Install Node.js & npm (LTS)
-# -------------------------------
-echo "Installing Node.js..."
-curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-apt install -y nodejs
-echo "Node Version: $(node -v)"
-echo "NPM Version: $(npm -v)"
+echo "Using Repository URL: $REPO_URL"
+echo "Target directory name: /$REPO_DIR_NAME"
+echo ""
 
-# -------------------------------
-# Clone Git Repo
-# -------------------------------
-cd /home/ubuntu || cd /root
-git clone "$REPO_URL" app
-cd app || exit 1
+# --- Install Dependencies ---
+echo "--- Installing Java Development Kit (JDK) 21 ---"
+sudo apt update -y
+sudo apt install openjdk-21-jdk -y
 
-# -------------------------------
-# Copy Stage Config
-# -------------------------------
-CONFIG_FILE="configs/${STAGE,,}_config.json"  # lowercase stage
-if [ ! -f "$CONFIG_FILE" ]; then
-  echo "❌ Config file $CONFIG_FILE not found!"
-  exit 1
+# Verify Java installation
+if command -v java &> /dev/null; then
+    echo "Java 21 installed successfully."
+    java -version
+else
+    echo "Error: Java 21 installation failed. Please check for errors."
+    exit 1
+fi
+echo ""
+
+echo "--- Installing Node.js (v20 LTS) and npm ---"
+sudo apt install -y ca-certificates curl gnupg
+sudo mkdir -p /etc/apt/keyrings
+sudo rm -f /etc/apt/keyrings/nodesource.gpg
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+NODE_MAJOR=20
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list
+sudo apt update -y
+sudo apt install nodejs -y
+
+# Verify Node.js and npm installation
+if command -v node &> /dev/null && command -v npm &> /dev/null; then
+    echo "Node.js and npm installed successfully."
+    node -v
+    npm -v
+else
+    echo "Error: Node.js and npm installation failed. Please check for errors."
+    exit 1
+fi
+echo ""
+
+# --- Install Global Maven ---
+echo "--- Installing Global Maven ---"
+sudo apt install maven -y
+
+# Verify Maven installation
+if command -v mvn &> /dev/null; then
+    echo "Maven installed successfully."
+    mvn --version
+else
+    echo "Error: Maven installation failed. Please check for errors."
+    exit 1
+fi
+echo ""
+
+# --- Clone Git Repository ---
+echo "--- Cloning Git Repository ---"
+cd /
+if [ -d "/$REPO_DIR_NAME" ]; then
+    echo "Warning: Directory /$REPO_DIR_NAME already exists. Skipping clone."
+else
+    git clone "$REPO_URL"
+    if [ ! -d "/$REPO_DIR_NAME" ]; then
+        echo "Error: Git clone failed or directory /$REPO_DIR_NAME was not created. Exiting."
+        exit 1
+    fi
+    echo "Repository cloned successfully to /$REPO_DIR_NAME"
+fi
+echo ""
+
+# --- Navigate into Cloned Directory and Build Application ---
+echo "--- Building the Application (using global mvn) ---"
+cd "/$REPO_DIR_NAME" || { echo "Error: Could not navigate to /$REPO_DIR_NAME. Exiting."; exit 1; }
+
+# Build the project using the globally installed Maven
+# This should now work without HOME parameter errors.
+mvn clean install
+
+echo "Project build completed successfully."
+echo ""
+
+# --- Run the Application (Directly from JAR) ---
+echo "--- Running the Application (Directly from JAR) ---"
+
+# Assuming the JAR file is in target/ and follows a standard Spring Boot naming convention
+# Example: target/your-artifact-id-0.0.1-SNAPSHOT.jar
+# You can get the artifactId from pom.xml or specify it directly.
+APP_ARTIFACT_ID="techeazy-devops" # <artifactId> from your pom.xml
+APP_VERSION="0.0.1-SNAPSHOT" # <version> from your pom.xml
+
+APP_JAR_NAME="$APP_ARTIFACT_ID-$APP_VERSION.jar"
+APP_JAR_PATH="./target/$APP_JAR_NAME"
+
+if [ -f "$APP_JAR_PATH" ]; then
+    echo "Found application JAR: $APP_JAR_PATH"
+    echo "Starting application in the background..."
+    # Running the JAR directly
+    nohup java -jar "$APP_JAR_PATH" > /var/log/application.log 2>&1 &
+    APP_PID=$!
+    echo "Application started with PID: $APP_PID"
+else
+    echo "Error: Application JAR not found at $APP_JAR_PATH. Cannot start application."
+    exit 1
 fi
 
-cp "$CONFIG_FILE" config.json
-echo "✅ Using config: $CONFIG_FILE"
+echo "Application started in the background."
+echo "Logs can be found in '/var/log/application.log'."
+echo "Please wait a few moments for the application to fully start."
+echo ""
 
-# -------------------------------
-# Build and Run App
-# -------------------------------
+# --- Final message ---
+echo "################################################################"
+echo "# Setup Complete!                                            #"
+echo "################################################################"
+echo "Application deployment script finished. Check instance logs and public IP."
 
-# Java build
-./mvnw clean package
-
-# Run app on port 80
-JAR_FILE=$(find target -name "*.jar" | head -n 1)
-
-if [ -z "$JAR_FILE" ]; then
-  echo "❌ No .jar file found in target/"
-  exit 1
-fi
-
-# Make sure port 80 is not blocked
-fuser -k 80/tcp || true
-
-echo "✅ Starting app..."
-nohup java -jar "$JAR_FILE" --server.port=80 > /var/log/app.log 2>&1 &
-
-echo "🎉 App is now running on port 80!"
