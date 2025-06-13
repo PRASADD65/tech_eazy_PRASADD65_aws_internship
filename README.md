@@ -1,5 +1,6 @@
 
-# 1st Assignment for DevOps  # 2nd Assignment is on project 2 branch
+# 1st Assignment for DevOps  
+# 2nd Assignment is on project 2 branch
 ## 🚀 Automate EC2 Deployment with Terraform on AWS
 
 ---
