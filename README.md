@@ -23,15 +23,23 @@
 ├── ec2.tf               # EC2 instance resource
 ├── variables.tf         # All variable definitions
 ├── outputs.tf           # Output values
-├── automate.sh     # User data script for EC2 provisioning
+├── automate.sh          # User data script for EC2 provisioning and build the spring boot application from techezy git repo
 └── configs/
     ├── dev_config
     └── prod_config      # Environment-specific configurations
 ```
-
 ---
 
-### ⚙️ Shell Script Responsibilities
+### 🚀 1 Terraform Workflow
+
+```bash
+terraform init
+terraform validate
+terraform plan
+terraform apply -var="stage=dev" -var="instance_name=my-app"
+```
+---
+### ⚙️ 2 Shell Script Responsibilities
 
 The `automate.sh.tmpl` script:
 
@@ -40,27 +48,15 @@ The `automate.sh.tmpl` script:
 3. Clones GitHub repository
 4. Builds the app using Maven
 5. Runs the app (assumes Spring Boot on port 80)
-
 ---
 
-### 🚀 Terraform Workflow
-
-```bash
-terraform init
-terraform validate
-terraform plan
-terraform apply -var="stage=dev" -var="instance_name=my-app"
-```
-
----
-
-### 📤 Config Selection by Environment Variable
+### 📤 3 Config Selection by Environment Variable
 
 Terraform dynamically selects either `dev_config` or `prod_config` based on the value passed via `-var="stage=..."`.
 
 ---
 
-### ✅ Terraform Output on AWS
+### ✅ 4 Terraform Output on AWS
 
 - Public IP and Private IP visible
 - VPC, Subnets, and Security Groups reflect `stage` value
@@ -69,7 +65,7 @@ Terraform dynamically selects either `dev_config` or `prod_config` based on the 
 
 ---
 
-### 🌐 Final Web Output
+### 🌐 5 Final Web Output
 
 After provisioning, the application is:
 
