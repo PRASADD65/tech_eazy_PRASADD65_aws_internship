@@ -1,29 +1,32 @@
 #!/bin/bash
 
-# This script performs the core automation tasks using global Maven
-# and directly running the compiled JAR.
+# automate.sh
+# This script performs the core automation tasks for application setup:
+# - Installing Java, Node.js, and Maven
+# - Cloning the Git repository
+# - Building and running the application
 #
-# It expects configuration variables like REPO_URL to be set
-# by a preceding script which is part of the user_data.
+# It expects necessary variables (REPO_URL) to be passed as environment variables
+# from the user_data script.
 
-# --- ENVIRONMENT FIXES (kept for robustness, though global Maven is less sensitive) ---
-# Ensure HOME environment variable is set as early as possible in the overall user_data script (in ec2.tf).
+# --- IMPORTANT ENVIRONMENT FIXES (kept for robustness) ---
 export HOME=/root
-
-# Explicitly set JAVA_HOME and update PATH for the apt-installed OpenJDK 21.
 export JAVA_HOME="/usr/lib/jvm/java-21-openjdk-amd64"
 export PATH="$JAVA_HOME/bin:$PATH"
 
-set -e
-set -x
+set -e # Exit immediately if a command exits with a non-zero status
+set -x # Print commands and their arguments as they are executed
 
 echo "################################################################"
 echo "# Starting Core Application Setup Script                     #"
 echo "# (Executed via Terraform user_data)                         #"
 echo "################################################################"
 
-# --- Define dynamic variables from sourced config or provide defaults ---
-REPO_URL="${REPO_URL:-https://github.com/techeazy-consulting/techeazy-devops.git}"
+# --- Define Variables (passed as environment variables from user_data) ---
+# REPO_URL should be available from the parent shell.
+# REPO_DIR_NAME can be derived here.
+
+# Extract repository directory name from the URL
 REPO_DIR_NAME=$(basename "$REPO_URL" .git)
 
 echo "Using Repository URL: $REPO_URL"
@@ -66,7 +69,6 @@ else
 fi
 echo ""
 
-# --- Install Global Maven ---
 echo "--- Installing Global Maven ---"
 sudo apt install maven -y
 
@@ -100,7 +102,6 @@ echo "--- Building the Application (using global mvn) ---"
 cd "/$REPO_DIR_NAME" || { echo "Error: Could not navigate to /$REPO_DIR_NAME. Exiting."; exit 1; }
 
 # Build the project using the globally installed Maven
-# This should now work without HOME parameter errors.
 mvn clean install
 
 echo "Project build completed successfully."
@@ -110,8 +111,6 @@ echo ""
 echo "--- Running the Application (Directly from JAR) ---"
 
 # Assuming the JAR file is in target/ and follows a standard Spring Boot naming convention
-# Example: target/your-artifact-id-0.0.1-SNAPSHOT.jar
-# You can get the artifactId from pom.xml or specify it directly.
 APP_ARTIFACT_ID="techeazy-devops" # <artifactId> from your pom.xml
 APP_VERSION="0.0.1-SNAPSHOT" # <version> from your pom.xml
 
@@ -121,7 +120,6 @@ APP_JAR_PATH="./target/$APP_JAR_NAME"
 if [ -f "$APP_JAR_PATH" ]; then
     echo "Found application JAR: $APP_JAR_PATH"
     echo "Starting application in the background..."
-    # Running the JAR directly
     nohup java -jar "$APP_JAR_PATH" > /var/log/application.log 2>&1 &
     APP_PID=$!
     echo "Application started with PID: $APP_PID"
@@ -135,9 +133,7 @@ echo "Logs can be found in '/var/log/application.log'."
 echo "Please wait a few moments for the application to fully start."
 echo ""
 
-# --- Final message ---
+# --- Final message for automate.sh ---
 echo "################################################################"
-echo "# Setup Complete!                                            #"
+echo "# Application Setup Complete!                                #"
 echo "################################################################"
-echo "Application deployment script finished. Check instance logs and public IP."
-
