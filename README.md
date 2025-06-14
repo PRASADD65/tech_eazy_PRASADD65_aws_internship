@@ -10,6 +10,7 @@
 - **Tools**:
   - Terraform
   - AWS Console
+  - EC2
   - Linux (Ubuntu preferred)
 
 ---
