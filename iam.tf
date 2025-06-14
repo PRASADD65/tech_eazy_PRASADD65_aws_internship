@@ -1,5 +1,3 @@
-# iam.tf
-
 # -----------------------------------------------------------------------------
 # IAM Role 1.b: Role for EC2 to Create Buckets and Upload Objects
 # This role will be attached to the EC2 instance.
@@ -24,8 +22,10 @@ resource "aws_iam_role" "app_instance_role" {
   }
 }
 
+# --------------------------------------------------------------------------------------------------------
 # IAM Policy for Role 1.b: Permissions to Create Buckets and Upload Objects
 # IMPORTANT: This policy explicitly denies s3:GetObject and s3:ListBucket for the specified bucket path.
+# ---------------------------------------------------------------------------------------------------------
 resource "aws_iam_policy" "s3_upload_policy" {
   name_prefix = "${var.stage}-s3-upload-policy"
   policy = jsonencode({
