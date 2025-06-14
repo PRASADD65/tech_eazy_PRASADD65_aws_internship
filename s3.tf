@@ -1,11 +1,8 @@
-# s3.tf
-
 # -----------------------------------------------------------------------------
 # S3 Bucket for Logs
 # -----------------------------------------------------------------------------
 resource "aws_s3_bucket" "app_logs_bucket" {
   bucket = var.s3_bucket_name # Uses the bucket name defined in variable.tf
-  # Removed: acl    = "private"
   
   tags = {
     Name = "${var.stage}-app-logs"
