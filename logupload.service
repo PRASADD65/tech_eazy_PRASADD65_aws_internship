@@ -1,0 +1,12 @@
+[Unit]
+Description=Upload cloud-init log to S3 on shutdown
+DefaultDependencies=no
+Before=shutdown.target reboot.target halt.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/upload-log.sh
+RemainAfterExit=true
+
+[Install]
+WantedBy=halt.target reboot.target shutdown.target
