@@ -47,3 +47,17 @@ output "selected_config_file" {
   value       = "${path.module}/configs/${var.stage}_config"
 }
 
+output "s3_bucket_name" {
+  description = "Name of the S3 bucket for logs"
+  value       = aws_s3_bucket.app_logs_bucket.bucket
+}
+
+output "ec2_instance_role_arn" {
+  description = "ARN of the IAM role attached to EC2"
+  value       = aws_iam_role.app_instance_role.arn
+}
+
+output "s3_read_only_role_arn" {
+  description = "ARN of the read-only S3 IAM role"
+  value       = aws_iam_role.s3_read_only_role.arn
+}
