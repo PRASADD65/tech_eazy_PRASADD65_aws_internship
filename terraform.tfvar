@@ -15,11 +15,9 @@ s3_bucket_name = "techeazy-project2-buckett"
 
 # Instance Shutdown and Log Backup Schedule (Cron Format)
 # <<< IMPORTANT: REPLACE WITH YOUR DESIRED CRON EXPRESSION >>>
-# Example: "40 18 * * *" means 18:40 (6:40 PM) UTC every day.
-# Example: "0 0 * * *" means Midnight (00:00) UTC every day.
-# Example: "0 * * * *" means every hour on the hour.
-# Check your instance's timezone or assume UTC for cron.
-shutdown_time  = "40 18 * * *"
+shutdown_hour = 17
+startup_cron  = "cron(30 0 * * ? *)" # 6:00 AM IST
+
 
 # Application Repository Configuration
 # This is the Git URL for your Spring Boot application's source code.
