@@ -12,23 +12,24 @@ ${automate_sh_content}
 EOF
 chmod +x /tmp/automate.sh
 
-# Step 2: Save logs_off.sh content
-cat <<'EOF' > /tmp/logs_off.sh
-${logs_off_sh_content}
+# Step 2: Save logupload.sh content
+cat <<'EOF' > /tmp/logupload.sh
+${logupload_sh_content}
 EOF
-chmod +x /tmp/logs_off.sh
+chmod +x /tmp/logupload.sh
 
 # Step 3: Export environment variables
 export REPO_URL="${repo_url}"
 export S3_BUCKET_NAME="${s3_bucket_name}"
 export STAGE="${stage}"
-export SHUTDOWN_TIME="${shutdown_time}"
+export SHUTDOWN_HOUR="${shutdown_hour}"
+export AWS_REGION="${region}"
 
 # Step 4: Run the automate script
 echo "Running /tmp/automate.sh..."
 /tmp/automate.sh
 
-# Step 5: Cleanup (optional)
-# rm /tmp/automate.sh /tmp/logs_off.sh
+# Step 5: Setup cron job for shutdown
+echo "0 ${SHUTDOWN_HOUR} * * * root /tmp/logupload.sh" >> /etc/crontab
 
 echo "EC2 bootstrap process completed successfully."
