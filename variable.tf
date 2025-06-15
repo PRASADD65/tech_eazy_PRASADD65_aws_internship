@@ -60,11 +60,12 @@ variable "s3_bucket_name" {
   # No default here, as it must be explicitly provided and globally unique
 }
 
-variable "shutdown_time" {
-  description = "The cron expression (5 parts: Minute Hour DayOfMonth Month DayOfWeek) for when the EC2 instance should shut down and logs are backed up. E.g., '40 18 * * *' for 6:40 PM daily."
+variable "shutdown_hour" {
+  type        = number
+  description = "Hour (24h) to shutdown EC2"
+}
+
+variable "startup_cron" {
   type        = string
-  validation {
-    condition     = length(regexall("\\s", var.shutdown_time)) == 4 && length(var.shutdown_time) > 0
-    error_message = "Shutdown time must be a 5-part cron expression (e.g., '0 17 * * *')."
-  }
+  description = "Cron expression to start EC2"
 }
