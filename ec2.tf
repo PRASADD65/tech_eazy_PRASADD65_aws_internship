@@ -1,3 +1,4 @@
+
 resource "aws_instance" "app_instance" {
   ami                         = "ami-07891c5a242abf4bc" # REMEMBER TO REPLACE THIS WITH YOUR REGION'S UBUNTU AMI ID
   instance_type               = var.instance_type
@@ -9,16 +10,17 @@ resource "aws_instance" "app_instance" {
   # Attach the IAM Instance Profile to this EC2 instance
   iam_instance_profile = aws_iam_instance_profile.app_instance_profile.name
 
- user_data = templatefile("${path.module}/user_data.sh.tpl", {
-  repo_url             = var.repo_url
-  s3_bucket_name       = var.s3_bucket_name
-  shutdown_hour        = var.shutdown_hour
-  stage                = var.stage
-  automate_sh_content  = file("${path.module}/automate.sh")
-  logupload_sh_content = file("${path.module}/logupload.sh")
-  permission_sh_content = file("${path.module}/permission.sh")
-  logupload_service_content = file("${path.module}/logupload.service")
-  region               = var.region
+  user_data = templatefile("${path.module}/user_data.sh.tpl", {
+    repo_url                = var.repo_url,
+    s3_bucket_name          = var.s3_bucket_name,
+    shutdown_hour           = var.shutdown_hour,
+    stage                   = var.stage,
+    automate_sh_content     = file("${path.module}/automate.sh"),
+    logupload_sh_content    = file("${path.module}/logupload.sh"),
+    permission_sh_content   = file("${path.module}/permission.sh"),
+    logupload_service_content = file("${path.module}/logupload.service"),
+    verifyrole1a_sh_content = file("${path.module}/verifyrole1a.sh"),
+    region                  = var.region
   })
 
   depends_on = [
@@ -32,7 +34,6 @@ resource "aws_instance" "app_instance" {
   }
 }
 
-
 resource "aws_cloudwatch_event_rule" "start_ec2" {
   name                = "start-ec2"
   schedule_expression = var.startup_cron
@@ -41,6 +42,8 @@ resource "aws_cloudwatch_event_rule" "start_ec2" {
 resource "aws_cloudwatch_event_target" "start_target" {
   rule      = aws_cloudwatch_event_rule.start_ec2.name
   target_id = "startEC2"
-  arn       = "arn:aws:ec2:${var.region}::instance/${aws_instance.app_instance.id}"
+  arn       = aws_ssm_document.start_ec2.arn
   role_arn  = aws_iam_role.ec2_start_role.arn
+
+  depends_on = [aws_ssm_document.start_ec2]
 }
