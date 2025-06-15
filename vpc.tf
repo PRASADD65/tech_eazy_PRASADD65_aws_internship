@@ -1,26 +1,32 @@
+
+# -----------------------------------------------------------------------------
+# VPC Configuration
+# -----------------------------------------------------------------------------
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "5.0.0" # It's good practice to pin module versions
+  version = "3.11.0"
 
-  name = "${var.stage}-${var.vpc_name}" 
-  cidr = var.vpc_cidr_block # Using the variable for VPC CIDR
+  name = var.vpc_name
+  cidr = var.vpc_cidr_block
 
+  azs             = ["us-west-2a", "us-west-2b"]
   public_subnets  = var.public_subnet_cidrs
   private_subnets = var.private_subnet_cidrs
 
-  enable_nat_gateway  = false # Set to true if private subnets need outbound internet access
-  enable_vpn_gateway  = false
+  enable_nat_gateway = false
+  enable_vpn_gateway = false
 
   tags = {
-    Name        = "${var.stage}-${var.vpc_name}-igw" # Adjust tag name for IGW
-    Terraform   = "true"
-    Environment = var.stage
+    Name = "${var.stage}-vpc"
   }
 }
 
+# -----------------------------------------------------------------------------
+# Security Group for EC2
+# -----------------------------------------------------------------------------
 resource "aws_security_group" "web_sg" {
-  name        = "${var.stage}-${var.instance_name}-web-sg" # Adjust name to use instance_name for clarity
-  description = "Allow HTTP and SSH access to web instances"
+  name        = "${var.stage}-${var.instance_name}-sg"
+  description = "Allow SSH and HTTP inbound traffic"
   vpc_id      = module.vpc.vpc_id
 
   ingress {
@@ -34,18 +40,17 @@ resource "aws_security_group" "web_sg" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] 
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Egress rule to allow all outbound traffic (common for web servers)
   egress {
     from_port   = 0
     to_port     = 0
-    protocol    = "-1" # -1 means all protocols
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
-    Name = "${var.stage}-${var.instance_name}-web-sg"
+    Name = "${var.stage}-${var.instance_name}-sg"
   }
 }
