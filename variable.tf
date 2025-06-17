@@ -1,3 +1,15 @@
+variable "region" {
+  description = "Define the region"
+  type        = string
+}
+
+variable "accountid" {
+  description = "Define the account number"
+  type        = number
+  default     = 390403879955
+}
+
+
 variable "stage" {
   description = "Deployment stage (dev or prod)"
   type        = string
@@ -61,7 +73,7 @@ variable "s3_bucket_name" {
 }
 
 variable "shutdown_hour" {
-  type        = number
+  type        = string
   description = "Hour (24h) to shutdown EC2"
 }
 

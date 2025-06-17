@@ -1,3 +1,8 @@
+
+# region
+region = "ap-south-2"
+
+
 # AWS EC2 Instance Configuration
 instance_type = "t3.micro" # You can change this if needed, e.g., "t3.small"
 key_name      = "hyd" # <<< IMPORTANT: REPLACE WITH YOUR ACTUAL EC2 KEY PAIR NAME >>>
@@ -15,8 +20,8 @@ s3_bucket_name = "techeazy-project2-buckett"
 
 # Instance Shutdown and Log Backup Schedule (Cron Format)
 # <<< IMPORTANT: REPLACE WITH YOUR DESIRED CRON EXPRESSION >>>
-shutdown_hour = 17
-startup_cron  = "cron(30 0 * * ? *)" # 6:00 AM IST
+shutdown_hour = "18:10"
+startup_cron  = "cron(15 18 * * ? *)"
 
 
 # Application Repository Configuration

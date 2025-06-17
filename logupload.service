@@ -5,7 +5,8 @@ Before=shutdown.target reboot.target halt.target
 
 [Service]
 Type=oneshot
-ExecStart=/opt/upload-log.sh
+Environment="S3_BUCKET_NAME=${s3_bucket_name}"
+ExecStart=/opt/logupload.sh
 RemainAfterExit=true
 
 [Install]

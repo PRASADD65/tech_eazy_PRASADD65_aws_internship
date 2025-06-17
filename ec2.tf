@@ -6,6 +6,7 @@ resource "aws_instance" "app_instance" {
   subnet_id                   = module.vpc.public_subnets[0]
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.web_sg.id]
+  user_data_replace_on_change = true
 
   # Attach the IAM Instance Profile to this EC2 instance
   iam_instance_profile = aws_iam_instance_profile.app_instance_profile.name
@@ -18,9 +19,12 @@ resource "aws_instance" "app_instance" {
     automate_sh_content     = file("${path.module}/automate.sh"),
     logupload_sh_content    = file("${path.module}/logupload.sh"),
     permission_sh_content   = file("${path.module}/permission.sh"),
-    logupload_service_content = file("${path.module}/logupload.service"),
+    logupload_service_content = templatefile("${path.module}/logupload.service", {
+    s3_bucket_name = var.s3_bucket_name
+    }),
     verifyrole1a_sh_content = file("${path.module}/verifyrole1a.sh"),
-    region                  = var.region
+    region		    = var.region,
+    AWS_ACCOUNT_ID = var.accountid
   })
 
   depends_on = [
@@ -34,16 +38,3 @@ resource "aws_instance" "app_instance" {
   }
 }
 
-resource "aws_cloudwatch_event_rule" "start_ec2" {
-  name                = "start-ec2"
-  schedule_expression = var.startup_cron
-}
-
-resource "aws_cloudwatch_event_target" "start_target" {
-  rule      = aws_cloudwatch_event_rule.start_ec2.name
-  target_id = "startEC2"
-  arn       = aws_ssm_document.start_ec2.arn
-  role_arn  = aws_iam_role.ec2_start_role.arn
-
-  depends_on = [aws_ssm_document.start_ec2]
-}

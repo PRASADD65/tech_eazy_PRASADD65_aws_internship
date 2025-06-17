@@ -4,12 +4,11 @@
 # -----------------------------------------------------------------------------
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "3.11.0"
 
   name = var.vpc_name
   cidr = var.vpc_cidr_block
 
-  azs             = ["us-west-2a", "us-west-2b"]
+  azs             = ["ap-south-2a", "ap-south-2b"]
   public_subnets  = var.public_subnet_cidrs
   private_subnets = var.private_subnet_cidrs
 

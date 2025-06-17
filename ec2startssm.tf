@@ -1,30 +1,35 @@
 resource "aws_ssm_document" "start_ec2" {
   name          = "start-ec2"
   document_type = "Automation"
-  content = <<EOF
-{
-  "schemaVersion": "0.3",
-  "description": "Start EC2 instance",
-  "parameters": {
-    "InstanceId": {
-      "type": "String",
-      "description": "EC2 Instance ID",
-      "default": "${aws_instance.app_instance.id}"
-    }
-  },
-  "mainSteps": [
-    {
-      "action": "aws:changeInstanceState",
-      "name": "startInstance",
-      "inputs": {
-        "InstanceId": "{{ InstanceId }}",
-        "State": "running"
+  content       = jsonencode({
+    schemaVersion = "0.3"
+    description   = "Start EC2 instance"
+    assumeRole    = "{{ AutomationAssumeRole }}"
+    parameters = {
+      InstanceIds = {
+        type        = "StringList"
+        description = "EC2 Instance IDs to start"
+        default     = ["${aws_instance.app_instance.id}"]
+      }
+      DesiredState = {
+        type        = "String"
+        description = "Desired state of instance"
+        default     = "running"
       }
     }
-  ]
+    mainSteps = [
+      {
+        name   = "startInstance"
+        action = "aws:changeInstanceState"
+        inputs = {
+          InstanceIds  = "{{ InstanceIds }}"
+          DesiredState = "{{ DesiredState }}"
+        }
+      }
+    ]
+  })
 }
-EOF
-}
+
 
 resource "aws_cloudwatch_event_rule" "start_ec2" {
   name                = "start-ec2"
@@ -54,6 +59,7 @@ resource "aws_iam_role" "ec2_start_role" {
   })
 }
 
+
 resource "aws_iam_policy" "ec2_start_policy" {
   name = "${var.stage}-ec2-start-policy"
   policy = jsonencode({
@@ -63,9 +69,19 @@ resource "aws_iam_policy" "ec2_start_policy" {
         Effect = "Allow",
         Action = [
           "ssm:StartAutomationExecution",
-          "ssm:GetAutomationExecution"
+          "ssm:GetAutomationExecution",
+          "ec2:StartInstances",
+          "ec2:DescribeInstances",        
+          "ec2:DescribeInstanceStatus"    
         ],
-        Resource = "*"
+        Resource = "*" # Resource "*" for actions like Describe is generally okay.
+                       # For StartInstances, you might want to scope it to the specific instance ARN
+                       # as in the previous example, but "*" is often used for simplicity if safe.
+      },
+      {
+        Effect = "Allow",
+        Action = "iam:PassRole",
+        Resource = aws_iam_role.ec2_start_role.arn
       }
     ]
   })

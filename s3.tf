@@ -10,10 +10,10 @@ resource "aws_s3_bucket" "app_logs_bucket" {
 }
 
 # Explicitly define S3 Bucket ACL
-resource "aws_s3_bucket_acl" "app_logs_bucket_acl" {
-  bucket = aws_s3_bucket.app_logs_bucket.id
-  acl    = "private"
-}
+# resource "aws_s3_bucket_acl" "app_logs_bucket_acl" {
+#  bucket = aws_s3_bucket.app_logs_bucket.id
+#  acl    = "private"
+#}
 
 # -----------------------------------------------------------------------------
 # S3 Bucket Public Access Block
