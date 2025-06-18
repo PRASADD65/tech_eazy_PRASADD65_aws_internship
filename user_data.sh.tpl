@@ -10,7 +10,7 @@ EOF
 chmod +x /usr/local/bin/upload_on_shutdown.sh
 
 # Step 2: Save upload-on-shutdown.service content (renamed for consistency)
-cat << 'EOF' > /etc/systemd/system/logupload.service
+cat << 'EOF' > /etc/systemd/system/upload-on-shutdown.service
 ${upload_on_shutdown_service_content}
 EOF
 
@@ -27,6 +27,8 @@ export STAGE="${stage}"
 export AWS_REGION="${region}"
 export AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID}"
 export INSTANCE_ID=$(ec2-metadata --instance-id | cut -d ' ' -f 2)
+export LOG_DIR_HOST="/root/springlog"
+
 
 # Step 5: Install AWS CLI, jq, and Docker
 echo "--> Checking for AWS CLI, jq, and Docker..."
