@@ -126,8 +126,8 @@ echo "--> Docker container 'c1' is running."
 echo "--> Enabling and starting logupload service..."
 systemctl daemon-reexec
 systemctl daemon-reload
-systemctl enable logupload.service
-systemctl start logupload.service
-echo "--> Logupload service enabled and started."
+systemctl enable upload-on-shutdown.service
+systemctl start upload-on-shutdown.service
+echo "--> upload-on-shutdown service enabled and started."
 
 echo "EC2 bootstrap process complete."
