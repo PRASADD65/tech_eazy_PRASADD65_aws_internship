@@ -1,0 +1,23 @@
+[Unit]
+Description=Upload Application Log to S3 on Shutdown/Reboot (${stage})
+# Ensure the mount point for logs is available before running this service
+RequiresMountsFor=/root/springlog
+DefaultDependencies=no
+After=network-online.target
+Before=shutdown.target reboot.target umount.target final.target
+
+[Service]
+Type=oneshot
+# Keep the service state as 'active' (though dead) after execution, for easier debugging with systemctl status
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/upload_on_shutdown.sh
+# Give the script more time to complete, e.g., 90 seconds
+TimeoutSec=90
+User=root
+Group=root
+# Direct output to both journal and console for maximum visibility
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=shutdown.target reboot.target
