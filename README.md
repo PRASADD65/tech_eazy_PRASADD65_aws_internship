@@ -5,9 +5,10 @@
 This project automates the provisioning of key AWS infrastructure components using Terraform. It includes:
 - EC2 instance provisioning
 - IAM roles for secure access control
+- Hosting the spring boot application
 - A private S3 bucket with lifecycle policies
 - Log archival on instance shutdown
-- Structured automation using shell scripts and systemd
+- Structured automation of self on/off on scheuduled time using EventBridge and Lambda function.
 
 ---
 
@@ -15,31 +16,38 @@ This project automates the provisioning of key AWS infrastructure components usi
 
 - **Infrastructure as Code**: Terraform  
 - **Cloud Provider**: AWS
-- **Cloud tools**: EC2, VPC, IAM, S3, Cloudwatch Event Bridge, AWS SSM
+- **Cloud tools**: EC2, VPC, IAM, S3, Cloudwatch Event Bridge, Lambda
 - **Scripts**: Bash (Shell), systemd  
 - **CLI Tools**: AWS CLI
+- **Containerizaton**: Docker
 ---
 
 ## 📁 Project Structure
 
 ```
 tech_eazy_PRASADD65_aws_internship/
-├── README.md
-├── automate.sh             - holds the spring boot app deployment
-├── ec2.tf                  - holds the ec2 configureation with shell script file inject to it.
-├── ec2startssm.tf          - holds the auto start the ec2 on the scheduled cron time.
-├── iam.tf                  - holds the IAM configurations providing IAM roles and policies for EC, S3.
-├── logupload.service       - to handle the log upload process to S3.
-├── logupload.sh            - Upload logs to S3.
-├── output.tf               - Outputs
-├── permission.sh           - Responsible for AWS CLI on EC2 and other permission for EC2 to execute the shell script files.
-├── s3.tf                   - S3 configuration with life cycle policy.
-├── terraform.tf            - AWS provider and region configuration.
-├── terraform.tfvars        - holds the variables to provide provision the infrastructure.
-├── user_data.sh.tpl        - holds the all the shell scripts files attach to ec2 for the task execution.
-├── variable.tf             - holds the variable for infrastructure flexibilities.
-├── verifyrole1a.sh         - Attach the role 1.a to EC2
-├── vpc.tf                  - holds the VPC, subnets, security groups configurations.
+├── app/
+│   ├── .terraform.lock.hcl
+│   ├── Dockerfile
+│   ├── build_lambda_zips.sh
+│   ├── cloudwatcheventrule.tf
+│   ├── ec2.tf
+│   ├── iam.tf
+│   ├── lambdafunction.tf
+│   ├── lambdapermission.tf
+│   ├── output.tf
+│   ├── s3.tf
+│   ├── start_instance.py
+│   ├── start_instance.zip
+│   ├── stop_instance.py
+│   ├── stop_instance.zip
+│   ├── terraform.tf
+│   ├── terraform.tfvars
+│   ├── upload-on-shutdown.service
+│   ├── upload_on_shutdown.sh
+│   ├── user_data.sh.tpl
+│   ├── variable.tf
+│   └── verifyrole1a.sh
 └── configs/
 ```
 
@@ -82,29 +90,111 @@ tech_eazy_PRASADD65_aws_internship/
 
 All automation scripts are located in the `scripts/` folder:
 
-- `logupload.sh`: Uploads logs to S3  
-- `logupload.service`: systemd unit that runs `logupload.sh` on shutdown  
-- `permission.sh`: Installs AWS CLI and configures services
+- `upload_on_shutdown.sh`: Uploads logs to S3  
+- `upload_on_shutdown.service`: systemd unit that runs `logupload.sh` on shutdown  
+- `user_data.sh.tpl`: To handle all the internal configurations and their functions.
 
 Referenced in Terraform using:  
 ```hcl
 user_data = file("scripts/permission.sh")
 ```
-
 ---
 
 ## 🚀 How to Deploy
 
+- I have used EC2 as my terraform handler. So all the process mention here are based performed on EC2 instance:
+- Login to your AWS account.
+- Create an EC2 instance with Ubuntu  OS on any region.
+- ssh into your EC2
+  ```
+  cd /path/to/your/.pem key file
+  ```
+  ```
+   ssh -i <your .pem keyfile> ubunut@<EC2 public_ip>
+  ```
+- Switch to root user
+  ```
+  sudo -i
+  ```
 ---
-
-### 🔧 Prerequisites
-
-- Terraform CLI ≥ v1.3.0  
-- AWS CLI installed and configured  
+- ### 🔧 Prerequisites
+- Update the ubuntu packages
+  ```
+  apt update
+  ```
+**Unzip** 
+  ```
+  apt install unzip
+  ````
+**AWS CLI**
+- AWS CLI install and update instructions for Linux
+- To install the AWS CLI, run the following commands:
+  ```
+  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+  unzip awscliv2.zip
+  sudo ./aws/install
+  ```
+- To update your current installation
+  ```
+   curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+   unzip awscliv2.zip
+   sudo ./aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+  ```
+- Confirm the installation with the following command
+  ```
+  aws --version
+  ```
+- Use the which command to find your symlink. This gives you the path to use with the --bin-dir parameter.
+  ```
+  which aws
+  ```
+**Configure the AWS Region**
+  ```
+  aws configure
+  ```
+- Now provide your Access key and Secret access key of your account (Best practice use IAM user).
+- Leave the rest of the configurations region, format as default.
+**Install Terraform**
+  Ubuntu/Debian :
+- HashiCorp's GPG signature and install HashiCorp's Debian package repository
+  ```
+  sudo apt-get update && sudo apt-get install -y gnupg software-properties-common
+  ```
+- Install the HashiCorp GPG key
+  ```
+  wget -O- https://apt.releases.hashicorp.com/gpg | \
+  gpg --dearmor | \
+  sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+  ```
+- Verify the key's fingerprint
+  ```
+  gpg --no-default-keyring \
+  keyring /usr/share/keyrings/hashicorp-archive-keyring.gpg \
+  fingerprint
+  ```
+- Add the official HashiCorp repository to your system. The lsb_release -cs command finds the distribution release codename for your current system, such as buster, groovy, or sid.
+  ```
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-     release || lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+  ```
+- Download the package information from HashiCorp
+  ```
+  sudo apt update
+  ```
+- Install Terraform from the new repository
+  ```
+  sudo apt-get install terraform
+  ```
+- Verify the installation
+  ```
+  terraform --version
+  ```
+-
 - IAM user/role with appropriate permissions  
 - SSH key pair for EC2 access
 
 ---
+
+
 
 ### 🧪 Deployment Steps
 
