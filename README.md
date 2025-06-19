@@ -122,94 +122,81 @@ user_data = file("scripts/permission.sh")
   ```
   apt update
   ```
-**Unzip** 
+  **Unzip** 
   ```
   apt install unzip
   ````
-**AWS CLI**
-- AWS CLI install and update instructions for Linux
-- To install the AWS CLI, run the following commands:
+  **AWS CLI**
+  - AWS CLI install and update instructions for Linux
+  - To install the AWS CLI, run the following commands:
   ```
   curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
   unzip awscliv2.zip
   sudo ./aws/install
   ```
-- To update your current installation
+  - To update your current installation
   ```
    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
    unzip awscliv2.zip
    sudo ./aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
   ```
-- Confirm the installation with the following command
+  - Confirm the installation with the following command
   ```
   aws --version
   ```
-- Use the which command to find your symlink. This gives you the path to use with the --bin-dir parameter.
+  - Use the which command to find your symlink. This gives you the path to use with the --bin-dir parameter.
   ```
   which aws
   ```
-**Configure the AWS Region**
+  **Configure the AWS Region**
   ```
   aws configure
   ```
-- Now provide your Access key and Secret access key of your account (Best practice use IAM user).
-- Leave the rest of the configurations region, format as default.
-**Install Terraform**
-  Ubuntu/Debian :
-- HashiCorp's GPG signature and install HashiCorp's Debian package repository
-  ```
+ - Now provide your Access key and Secret access key of your account (Best practice use IAM user).
+ - Leave the rest of the configurations region, format as default.
+   
+ **Install Terraform**
+ - Ubuntu/Debian :
+ - HashiCorp's GPG signature and install HashiCorp's Debian package repository
+ ```
   sudo apt-get update && sudo apt-get install -y gnupg software-properties-common
-  ```
-- Install the HashiCorp GPG key
-  ```
+ ```
+ - Install the HashiCorp GPG key
+ ```
   wget -O- https://apt.releases.hashicorp.com/gpg | \
   gpg --dearmor | \
   sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
-  ```
-- Verify the key's fingerprint
+ ```
+ - Verify the key's fingerprint
   ```
   gpg --no-default-keyring \
   keyring /usr/share/keyrings/hashicorp-archive-keyring.gpg \
   fingerprint
-  ```
-- Add the official HashiCorp repository to your system. The lsb_release -cs command finds the distribution release codename for your current system, such as buster, groovy, or sid.
-  ```
+ ```
+ - Add the official HashiCorp repository to your system. The lsb_release -cs command finds the distribution release codename for your current system, such as buster, groovy, or sid.
+ ```
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-     release || lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-  ```
-- Download the package information from HashiCorp
+ ```
+ - Download the package information from HashiCorp
   ```
   sudo apt update
   ```
-- Install Terraform from the new repository
+ - Install Terraform from the new repository
   ```
   sudo apt-get install terraform
   ```
-- Verify the installation
+ - Verify the installation
   ```
   terraform --version
   ```
--
-- IAM user/role with appropriate permissions  
-- SSH key pair for EC2 access
-
 ---
-
-
-
 ### 🧪 Deployment Steps
 
 ```bash
 # Clone the repository
 git clone https://github.com/PRASADD65/tech_eazy_PRASADD65_aws_internship.git
 cd tech_eazy_PRASADD65_aws_internship
-
-
-# Deploy
-terraform init
-terraform plan
-terraform apply
 ```
-
 ## Variables inputs on terraform.tfvars
 - Region (can be vary as per requirement)
 - Instance type
@@ -217,10 +204,48 @@ terraform apply
 - stage (prod/dev)
 - VPC CIDR block, subnets range
 - S3 bucket name (most important or else terraform will not initilize the infrastructure)
-- EC2 start time (in 24 hour format, Eg. 14:25 )
-- EC2 stop time (in cron job format - 45 22 * * ? * - will turn off at 22:45)
+- EC2 start time - in cron job format - (45 22 * * ? *) 
+- EC2 stop time - in cron job format - (45 22 * * ? * ) (Cron job formats are should be in UTC time zone, as per EventBridge works on UTC format)
+  - Example Scenarios:
+    Let's say you want a cron job to run daily at 2:00 PM IST.
+    Convert IST to UTC:
+    2:00 PM IST - 5 hours 30 minutes = 8:30 AM UTC
+  - The cron entry would be:
+    ```
+    30 8 * * ? *
+    ```
+- Cron Job Syntax:
+A cron entry has five fields for time and date, followed by the command to execute:    
+```
+┌───────────── min (0 - 59)
+│ ┌───────────── hour (0 - 23)
+│ │ ┌───────────── day of month (1 - 31)
+│ │ │ ┌───────────── month (1 - 12)
+│ │ │ │ ┌───────────── day of week (0 - 6) (Sunday to Saturday)
+│ │ │ │ │
+* * * * * command_to_execute
+```
 ---
+# Deploy
+```
+terraform init
+```
+```
+terraform plan
+```
+```
+terraform apply
+```
 
+**Output**
+- Test your spring boot application:
+Open you web browser. search
+```
+<EC2 public-ip> - wait for some time, as it may take some time to boot the application.
+```
+- Check your lambda functions, Eventbridge - <stage>-ec2-start/stop rule
+- TO test log upload, you can adjust the stop time 
+    
 ## ⚠️ Notes
 
 - Terraform will **fail** if `bucket_name` is not provided  
