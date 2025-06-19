@@ -93,17 +93,29 @@ All automation scripts are located in the `scripts/` folder:
 - `upload_on_shutdown.sh`: Uploads logs to S3  
 - `upload_on_shutdown.service`: systemd unit that runs `logupload.sh` on shutdown  
 - `user_data.sh.tpl`: To handle all the internal configurations and their functions.
-
-Referenced in Terraform using:  
-```hcl
-user_data = file("scripts/permission.sh")
-```
 ---
 
 ## 🚀 How to Deploy
+we will have following procedures to perform this assignment:
+1. Set IAM permissions if your are using IAM user account. If it is root account, it is not requried.
+2. Set up the EC2 to use terraform  and provision the infrastructure.
 
+
+**1. IAM permissions**
+- As a root account user no need to set IAM policies.
+- If you are using an IAM user, must provide following IAM policies:
+   - Go to IAM console
+   - Select the user
+   - Add permissions
+      - EC2fullaccess
+      - Lambdafullaccess
+      - S3fullaccess
+      - Eventbridgefullaccess
+   - For best practice use custom managed policy with inline policies more granular control.
+     
+**2. EC2**
 - I have used EC2 as my terraform handler. So all the process mention here are based performed on EC2 instance:
-- Login to your AWS account.
+- Login to your AWS account. Root account or to your IAM user account.
 - Create an EC2 instance with Ubuntu  OS on any region.
 - ssh into your EC2
   ```
@@ -117,16 +129,23 @@ user_data = file("scripts/permission.sh")
   sudo -i
   ```
 ---
-- ### 🔧 Prerequisites
+
+### 🔧 Prerequisites
+Once we login to the EC2, we have to install the Prerequisites:
+ - unzip
+ - AWS CLI
+ - Configure the AWS region
+ - Terraform
+---
 - Update the ubuntu packages
   ```
   apt update
   ```
-  **Unzip** 
+- **Unzip** 
   ```
   apt install unzip
   ````
-  **AWS CLI**
+- **AWS CLI**
   - AWS CLI install and update instructions for Linux
   - To install the AWS CLI, run the following commands:
   ```
@@ -148,44 +167,44 @@ user_data = file("scripts/permission.sh")
   ```
   which aws
   ```
-  **Configure the AWS Region**
+- **Configure the AWS Region**
   ```
   aws configure
   ```
- - Now provide your Access key and Secret access key of your account (Best practice use IAM user).
- - Leave the rest of the configurations region, format as default.
+  - Now provide your Access key and Secret access key of your account (Best practice use IAM user).
+  - Leave the rest of the configurations region, format as default.
    
- **Install Terraform**
- - Ubuntu/Debian :
- - HashiCorp's GPG signature and install HashiCorp's Debian package repository
- ```
-  sudo apt-get update && sudo apt-get install -y gnupg software-properties-common
- ```
- - Install the HashiCorp GPG key
- ```
-  wget -O- https://apt.releases.hashicorp.com/gpg | \
-  gpg --dearmor | \
-  sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
- ```
- - Verify the key's fingerprint
+- **Install Terraform**
+  - Ubuntu/Debian :
+  - HashiCorp's GPG signature and install HashiCorp's Debian package repository
+  ```
+   sudo apt-get update && sudo apt-get install -y gnupg software-properties-common
+  ```
+  - Install the HashiCorp GPG key
+  ```
+   wget -O- https://apt.releases.hashicorp.com/gpg | \
+   gpg --dearmor | \
+   sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+   ```
+  - Verify the key's fingerprint
   ```
   gpg --no-default-keyring \
   keyring /usr/share/keyrings/hashicorp-archive-keyring.gpg \
   fingerprint
- ```
- - Add the official HashiCorp repository to your system. The lsb_release -cs command finds the distribution release codename for your current system, such as buster, groovy, or sid.
- ```
+  ```
+  - Add the official HashiCorp repository to your system. The lsb_release -cs command finds the distribution release codename for your current system, such as buster, groovy, or sid.
+  ```
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-     release || lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
- ```
- - Download the package information from HashiCorp
+  ```
+  - Download the package information from HashiCorp
   ```
   sudo apt update
   ```
- - Install Terraform from the new repository
+  - Install Terraform from the new repository
   ```
   sudo apt-get install terraform
   ```
- - Verify the installation
+  - Verify the installation
   ```
   terraform --version
   ```
@@ -202,7 +221,7 @@ cd tech_eazy_PRASADD65_aws_internship
 - Instance type
 - Key name (must available on that region on AWS console)
 - stage (prod/dev)
-- VPC CIDR block, subnets range
+- VPC (Not requried as we are using default VPC)
 - S3 bucket name (most important or else terraform will not initilize the infrastructure)
 - EC2 start time - in cron job format - (45 22 * * ? *) 
 - EC2 stop time - in cron job format - (45 22 * * ? * ) (Cron job formats are should be in UTC time zone, as per EventBridge works on UTC format)
@@ -231,28 +250,38 @@ A cron entry has five fields for time and date, followed by the command to execu
 terraform init
 ```
 ```
+terraform validate
+```
+```
 terraform plan
 ```
 ```
 terraform apply
+```
+- To destroy the infrastructure
+```
+terraform destroy
 ```
 
 **Output**
 - Test your spring boot application:
 Open you web browser. search
 ```
-<EC2 public-ip> - wait for some time, as it may take some time to boot the application.
+<EC2 public-ip>:80  - wait for some time, as it may take some time to boot the application.
 ```
-- Check your lambda functions, Eventbridge - <stage>-ec2-start/stop rule
-- TO test log upload, you can adjust the stop time 
+- lambda functions, Eventbridge - <stage>-ec2-start/stop rule to automate the ec2 scheduled start and stop for cost saving.
+- A S3 bucket with stage name to store the log when the ec2 will stop with after 7 days log delete Lifecycle policy. 
+- To test log upload to s3, stop the EC2 by cron job or manually.
+- For quick test manually stop the ec2 and test the S3 bucket - Go to your-bucket - /app/logs/shutdown_logs/application_log_<logid>_shutdown.log
+- If in the 1st attempt the logs does not upload to the S3, start your ec2 again and wait until the application boot. Once the application is online, stop the instance and check your S3        bucket.
     
 ## ⚠️ Notes
 
 - Terraform will **fail** if `bucket_name` is not provided  
-- EC2 must have **IAM permissions** to access S3  
+- EC2 must have **IAM permissions** to use S3, Lambda, EventBridge 
 - EC2 requires **internet access** to install AWS CLI
-- EC2 start time - just write - 14:01 (As per your requirement)
-- EC2 stop time - write like this - cron(45 22 * * ? *)   (As per your requirement)
+- EC2 start time - cron(45 22 * * ? *) (As per your requirement)
+- EC2 stop time  - cron(45 22 * * ? *)   (As per your requirement)
 
 ---
 
