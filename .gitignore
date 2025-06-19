@@ -1,0 +1,42 @@
+# Ignore everything initially
+*
+
+# EXCEPT for the .gitignore file itself
+!.gitignore
+
+# EXCEPT for the 'app/' directory and its contents
+!app/
+!app/*
+!app/**/*
+
+# Explicitly un-ignore each specific file you want within 'app/'
+!app/Dockerfile
+!app/configs/ # If 'configs' is a directory, this is correct. If it's a file, remove the slash.
+!app/lambdafunction.tf
+!app/s3.tf
+!app/start_instance.zip
+!app/terraform.tf
+!app/terraform.tfvars
+!app/user_data.sh.tpl
+!app/build_lambda_zips.sh
+!app/ec2.tf
+!app/lambdapermission.tf
+!app/snap # If 'snap' is a directory and you want its contents in Git, this is correct. If it's a file, it will be added.
+!app/stop_instance.py
+!app/stop_instance.zip
+!app/terraform.tfstate
+!app/terraform.tfstate.backup
+!app/upload-on-shutdown.service
+!app/variable.tf
+!app/cloudwatcheventrule.tf
+!app/iam.tf
+!app/output.tf
+!app/upload_on_on_shutdown.sh
+!app/verifyrole1a.sh
+
+# Explicitly ignore other top-level directories/files not desired in the repo
+# This ensures they are truly ignored despite the general un-ignore for 'app/'
+aws/
+awscliv2.zip
+snap/ # Assuming this 'snap' is the one from your `ls ~/` output and you want to ignore it.
+      # (Note: there's also an 'app/snap' listed, if that's a directory you want, keep the !app/snap entry above)
