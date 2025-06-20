@@ -1,0 +1,76 @@
+resource "aws_instance" "app_server" { # Changed from "techeazy_ec2_app"
+  ami                            = "ami-07891c5a242abf4bc" # Keep your specific AMI ID. Confirm it's valid for your region.
+  instance_type                  = var.instance_type
+  key_name                       = var.key_name
+  associate_public_ip_address    = true
+  vpc_security_group_ids         = [aws_security_group.web_sg.id]
+  user_data_replace_on_change    = true
+
+  # Attach the IAM Instance Profile to this EC2 instance
+  iam_instance_profile = aws_iam_instance_profile.app_instance_profile.name
+
+user_data = templatefile("${path.module}/user_data.sh.tpl", {
+    # Ensure this matches the case used in user_data.sh.tpl
+    REPO_URL                        = var.repo_url,
+    S3_BUCKET_NAME                  = var.s3_bucket_name, # CHANGE THIS LINE from s3_bucket_name to S3_BUCKET_NAME
+    STAGE                           = var.stage, # THIS WILL LIKELY BE THE NEXT ONE, SO LET'S CHANGE IT TOO
+    AWS_REGION                      = var.region,
+    AWS_ACCOUNT_ID                  = data.aws_caller_identity.current.account_id
+
+    # Corrected templatefile call for the service content (this part is already correct)
+    upload_on_shutdown_service_content = templatefile("${path.module}/upload-on-shutdown.service", {
+      S3_BUCKET_NAME = var.s3_bucket_name
+      STAGE          = var.stage
+    }),
+
+    upload_on_shutdown_sh_content = file("${path.module}/upload_on_shutdown.sh"),
+    verifyrole1a_sh_content         = file("${path.module}/verifyrole1a.sh"),
+    dockerfile_content              = file("${path.module}/Dockerfile")
+  })
+  depends_on = [
+    aws_security_group.web_sg,
+    aws_iam_instance_profile.app_instance_profile # Ensure IAM profile is created before attaching
+  ]
+
+  tags = {
+    Name  = "${var.stage}-app-server"
+    Stage = var.stage # Added Stage tag as per our common practice
+  }
+
+  root_block_device { # Added this block for explicit volume size, good practice
+    volume_size = 20 # Default to 20GB, adjust as needed
+  }
+
+}
+
+
+resource "aws_security_group" "web_sg" {
+  name        = "${var.stage}-app-web-sg"
+  description = "Allow SSH and HTTP inbound traffic for app server"
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name  = "${var.stage}-app-web-sg"
+    Stage = var.stage
+  }
+}
