@@ -21,35 +21,39 @@ This project automates the provisioning of key AWS infrastructure components usi
 - **Scripts**: Bash (Shell), systemd  
 - **CLI Tools**: AWS CLI
 - **Containerizaton**: Docker
+- **CI/CD Automation**: GitHub Action
 ---
 
 ## 📁 Project Structure
 
 ```
 tech_eazy_PRASADD65_aws_internship/
-├── app/
-│   ├── .terraform.lock.hcl
-│   ├── Dockerfile
-│   ├── build_lambda_zips.sh
-│   ├── cloudwatcheventrule.tf
-│   ├── ec2.tf
-│   ├── iam.tf
-│   ├── lambdafunction.tf
-│   ├── lambdapermission.tf
-│   ├── output.tf
-│   ├── s3.tf
-│   ├── start_instance.py
-│   ├── start_instance.zip
-│   ├── stop_instance.py
-│   ├── stop_instance.zip
-│   ├── terraform.tf
-│   ├── terraform.tfvars
-│   ├── upload-on-shutdown.service
-│   ├── upload_on_shutdown.sh
-│   ├── user_data.sh.tpl
-│   ├── variable.tf
-│   └── verifyrole1a.sh
-└── configs/
+
+   ├── .github
+   |     ├── workflows
+   |          └── deploy.yml
+   |          └── destroy.yml
+   ├── Dockerfile
+   ├── build_lambda_zips.sh
+   ├── cloudwatcheventrule.tf
+   ├── ec2.tf
+   ├── iam.tf
+   ├── lambdafunction.tf
+   ├── lambdapermission.tf
+   ├── output.tf
+   ├── s3.tf
+   ├── start_instance.py
+   ├── start_instance.zip
+   ├── stop_instance.py
+   ├── stop_instance.zip
+   ├── terraform.tf
+   ├── terraform.tfvars
+   ├── upload-on-shutdown.service
+   ├── upload_on_shutdown.sh
+   ├── user_data.sh.tpl
+   ├── variable.tf
+   └── verifyrole1a.sh
+   └── configs/
 ```
 
 ---
