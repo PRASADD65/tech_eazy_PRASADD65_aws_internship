@@ -95,7 +95,9 @@ All automation scripts are located in the `scripts/` folder:
 - `user_data.sh.tpl`: To handle all the internal configurations and their functions.
 ---
 
-## 🚀 How to Deploy
+## 🚀 How to Deploy 
+**Manual** 
+
 we will have following procedures to perform this assignment:
 1. Set IAM permissions if your are using IAM user account. If it is root account, it is not requried.
 2. Set up the EC2 to use terraform  and provision the infrastructure.
@@ -285,6 +287,15 @@ Open you web browser. search
 
 ---
 
-## 
-
-- 
+## GitHub Action - CI/CD automation
+- Automate the build and destroy the infrastructure.
+- Set the AWS credentials in the Repository secrets.
+- Once you are all set with your codes, push to the github repo.
+- Upon push to the github repo, the jobs will be taken care by as following:
+ - The job will be build in Github hosted runner (default runner).
+ - The .github/workflow/deploy.yml file will be responsible for create the infrastructure.
+ - The .github/workflow/destroy.yml file will be responsible for destory the infrastructure.
+ - the infrastructures will be managed with different different workspace to maintain the infrastructure as per stage, eg. dev or prod.
+ - Set the stage dev/prod on the Run workflow "Deploy in the AWS Infrastructure with Terraform workflow" to deploy the infrastructure.
+ - Type "destroy" in the Run workflow in the "Destroy AWS destroy infrastructure workflow" to destroy the infrastructure.
+ - You have to manually type "destroy" to prevent accidental delete of infrastructure.
