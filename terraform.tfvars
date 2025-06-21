@@ -15,7 +15,7 @@ s3_bucket_name = "techeazy-project2-buckett"
 # Instance Schedule (Cron Format)
 # These map to 'start_schedule' and 'stop_schedule' in variables.tf
 start_schedule = "cron(00 14 * * ? *)" 
-stop_schedule  = "cron(55 13 * * ? *)" 
+stop_schedule  = "cron(05 14 * * ? *)" 
 
 # Application Repository Configuration
 # This is the Git URL for your Spring Boot application's source code.
