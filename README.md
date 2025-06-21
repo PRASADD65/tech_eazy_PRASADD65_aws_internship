@@ -290,6 +290,7 @@ Open you web browser. search
 - EC2 start time - cron(45 22 * * ? *) (As per your requirement)
 - EC2 stop time  - cron(45 22 * * ? *)   (As per your requirement)
 - It might take some time to display the spring boot application on browser. Wait for the EC2 to complete it's initializing process.
+- The 1st CI/CD will show you build failed. No need to worry, it is just the health check error of the spring boot application, as the spring boot app takes some time to boot. Rest, all the infrastructre is ready to do it's task. On the further commits the health check error will be reslove and you will see the green check mark.
 
 ---
 
