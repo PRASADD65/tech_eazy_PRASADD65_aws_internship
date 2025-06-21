@@ -289,6 +289,7 @@ Open you web browser. search
 - EC2 requires **internet access** to install AWS CLI
 - EC2 start time - cron(45 22 * * ? *) (As per your requirement)
 - EC2 stop time  - cron(45 22 * * ? *)   (As per your requirement)
+- It might take some time to display the spring boot application on browser. Wait for the EC2 to complete it's initializing process.
 
 ---
 
