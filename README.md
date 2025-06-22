@@ -4,12 +4,14 @@
 ## 📘 Overview
 
 This project automates the provisioning of key AWS infrastructure components using Terraform. It includes:
-- EC2 instance provisioning
-- IAM roles for secure access control
-- Hosting the spring boot application
-- A private S3 bucket with lifecycle policies
-- Log archival on instance shutdown
-- Structured automation of self on/off on scheuduled time using EventBridge and Lambda function.
+
+- EC2 instance provisioning.
+- IAM roles for secure access control.
+- Docker containerization environment to build and host the Java Spring Boot Application.
+- A private S3 bucket with lifecycle policies.
+- Log archival on instance shutdown.
+- Structured automation of self on/off on scheduled time using Event Bridge and Lambda function.
+- Git Hub CI/CD to automate the process of deploy and destroy the infrastructure.
 
 ---
 
@@ -297,6 +299,7 @@ Open you web browser. search
 ## GitHub Action - CI/CD automation
 - Automate the build and destroy the infrastructure.
 - Set the AWS credentials in the Repository secrets.
+- Set the S3 bucket name for the backend terraform.tfstate file storage in the backend.tf file. This bucket have to prebuild on the cloud before the command terraform apply execute.
 - Once you are all set with your codes, push to the github repo.
 - Upon push to the github repo, the jobs will be taken care by as following:
  - The job will be build in Github hosted runner (default runner).
