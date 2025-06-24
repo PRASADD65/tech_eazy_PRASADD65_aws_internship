@@ -5,7 +5,7 @@ region = "ap-south-2"
 # AWS EC2 Instance Configuration
 instance_type = "t3.micro"
 key_name      = "hyd" # <<< IMPORTANT: REPLACE WITH YOUR ACTUAL EC2 KEY PAIR NAME >>>
-stage         = "prod"      # Defines the environment/stage
+stage         = "dev"      # Defines the environment/stage
 
 # S3 Bucket and Log Backup Configuration
 # <<< IMPORTANT: REPLACE WITH A GLOBALLY UNIQUE S3 BUCKET NAME >>>
