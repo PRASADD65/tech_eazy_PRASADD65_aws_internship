@@ -1,93 +1,234 @@
-resource "aws_instance" "app_server" {
-  ami                         = "ami-07891c5a242abf4bc" # Keep your specific AMI ID. Confirm it's valid for your region.
-  instance_type               = var.instance_type
-  key_name                    = var.key_name
-  associate_public_ip_address = true
-  vpc_security_group_ids      = [aws_security_group.web_sg.id]
-  user_data_replace_on_change = true
+# Data source for current AWS account ID, needed for ARN constructions
+data "aws_caller_identity" "current" {}
 
-  # Attach the IAM Instance Profile to this EC2 instance
-  iam_instance_profile = aws_iam_instance_profile.app_instance_profile.name
-
-  user_data = templatefile("${path.module}/user_data.sh.tpl", {
-  REPO_URL                     = var.repo_url,
-  S3_BUCKET_NAME               = var.s3_bucket_name,
-  STAGE                        = var.stage,
-  AWS_REGION                   = var.region,
-  AWS_ACCOUNT_ID               = data.aws_caller_identity.current.account_id,
-  REPO_NAME                    = trimsuffix(basename(var.repo_url), ".git"),
-  upload_on_shutdown_service_content = templatefile("${path.module}/upload-on-shutdown.service", {
-    S3_BUCKET_NAME = var.s3_bucket_name,
-    STAGE          = var.stage   
-  }),
-  upload_on_shutdown_sh_content = file("${path.module}/upload_on_shutdown.sh"),
-  verifyrole1a_sh_content       = file("${path.module}/verifyrole1a.sh"),
-  dockerfile_content            = file("${path.module}/Dockerfile")
+# -----------------------------------------------------------------------------
+# IAM Role 1.b: EC2 Instance Role for S3 Upload (Create Bucket, Upload, NO Read/Down)
+# This role is attached directly to the EC2 instance via an instance profile.
+# -----------------------------------------------------------------------------
+resource "aws_iam_role" "ec2_s3_upload_role" {
+  name_prefix        = "${var.stage}-ec2-s3-upload-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action    = "sts:AssumeRole",
+        Effect    = "Allow",
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
   })
-  
-  # The explicit self-dependency is NOT needed here anymore for private_ip as it's fetched in user_data.
-  # However, keeping other depends_on as per your original file.
-  depends_on = [
-    aws_security_group.web_sg,
-    aws_iam_instance_profile.app_instance_profile # Ensure IAM profile is created before attaching
-  ]
 
   tags = {
-    Name  = "${var.stage}-app-server"
-    Stage = var.stage
-  }
-
-  root_block_device {
-    volume_size = 20
+    Name = "${var.stage}-ec2-s3-upload-role"
   }
 }
 
+# IAM Policy for Role 1.b: S3 Upload Permissions (CreateBucket, PutObject, PutObjectAcl, ListBucket specific)
+resource "aws_iam_policy" "ec2_s3_upload_policy" {
+  name_prefix = "${var.stage}-ec2-s3-upload-policy"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:CreateBucket",
+          "s3:PutObject",
+          "s3:PutObjectAcl"
+        ],
+        Resource = [
+          "arn:aws:s3:::${var.s3_bucket_name}",
+          "arn:aws:s3:::${var.s3_bucket_name}/app/logs/${var.stage}/shutdown_logs/*"
+        ]
+      },
+      {
+        Effect = "Allow",
+        Action = ["s3:ListBucket"],
+        Resource = "arn:aws:s3:::${var.s3_bucket_name}",
+        Condition = {
+          StringLike = {
+            "s3:prefix": "app/logs/${var.stage}/shutdown_logs/*"
+          }
+        }
+      },
+      {
+        Effect = "Deny",
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectAcl",
+          "s3:GetObjectVersion",
+          "s3:GetObjectVersionAcl",
+          "s3:GetObjectTagging",
+          "s3:GetObjectTorrent"
+        ],
+        Resource = [
+          "arn:aws:s3:::${var.s3_bucket_name}",
+          "arn:aws:s3:::${var.s3_bucket_name}/*"
+        ]
+      }
+    ]
+  })
+}
+# Attach Policy to EC2 S3 Upload Role
+resource "aws_iam_role_policy_attachment" "ec2_s3_upload_policy_attach" {
+  role       = aws_iam_role.ec2_s3_upload_role.name
+  policy_arn = aws_iam_policy.ec2_s3_upload_policy.arn
+}
 
-resource "aws_security_group" "web_sg" {
-  name        = "${var.stage}-app-web-sg"
-  description = "Allow SSH and HTTP inbound traffic for app server"
+# IAM Instance Profile: Connects the EC2 instance to the S3 Upload role (1.b)
+resource "aws_iam_instance_profile" "app_instance_profile" {
+  name = "${var.stage}-app-instance-profile"
+  role = aws_iam_role.ec2_s3_upload_role.name
+}
 
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # --- Ingress rules for Grafana and Prometheus UIs (from previous step) ---
-  ingress {
-    from_port   = 3000
-    to_port     = 3000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # IMPORTANT: Restrict this in production to your IP or known range
-    description = "Allow Grafana UI access"
-  }
-
-  ingress {
-    from_port   = 9090
-    to_port     = 9090
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # IMPORTANT: Restrict this in production to your IP or known range
-    description = "Allow Prometheus UI access"
-  }
-  # --- End Ingress Rules ---
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+# -----------------------------------------------------------------------------
+# IAM Role 1.a: Role for Read-Only Access to S3 (for verification)
+# This role is for verification purposes, to be assumed by the EC2 instance.
+# -----------------------------------------------------------------------------
+resource "aws_iam_role" "s3_read_only_role" {
+  name_prefix        = "${var.stage}-s3-read-only-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action    = "sts:AssumeRole",
+        Effect    = "Allow",
+        Principal = {
+          AWS = [
+            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root", # Allows your AWS account root to assume (for CLI testing)
+            aws_iam_role.ec2_s3_upload_role.arn # Allows the EC2 instance's role to assume this role
+          ]
+        }
+      }
+    ]
+  })
 
   tags = {
-    Name  = "${var.stage}-app-web-sg"
-    Stage = var.stage
+    Name = "${var.stage}-s3-read-only-role"
   }
+}
+
+# IAM Policy for Role 1.a: Read-Only S3 Access
+resource "aws_iam_policy" "s3_read_only_policy" {
+  name_prefix = "${var.stage}-s3-read-only-policy"
+  policy      = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = [
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:GetBucketLocation",
+          "s3:ListBucketMultipartUploads",
+          "s3:ListMultipartUploadParts"
+        ],
+        Resource = [
+          "arn:aws:s3:::${var.s3_bucket_name}",
+          "arn:aws:s3:::${var.s3_bucket_name}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Attach Policy to S3 Read-Only Role
+resource "aws_iam_role_policy_attachment" "s3_read_only_policy_attach" {
+  role       = aws_iam_role.s3_read_only_role.name
+  policy_arn = aws_iam_policy.s3_read_only_policy.arn
+}
+
+
+# -----------------------------------------------------------------------------
+# IAM Role for EC2 Stop/Start EventBridge Rule 
+# -----------------------------------------------------------------------------
+resource "aws_iam_role" "ec2_stop_start_eventbridge_role" {
+  name               = "${var.stage}-ec2-stop-start-eventbridge-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect    = "Allow",
+        Principal = {
+          Service = "events.amazonaws.com"
+        },
+        Action    = "sts:AssumeRole"
+      }
+    ]
+  })
+  tags = {
+    Name = "${var.stage}-ec2-stop-start-eventbridge-role"
+  }
+}
+
+resource "aws_iam_policy" "ec2_stop_start_eventbridge_policy" {
+  name_prefix = "${var.stage}-ec2-stop-start-eventbridge-policy"
+  policy      = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = [
+          "ec2:StartInstances",
+          "ec2:StopInstances"
+        ],
+        Resource = "*" # Can be narrowed down later
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_stop_start_eventbridge_policy_attach" {
+  role       = aws_iam_role.ec2_stop_start_eventbridge_role.name
+  policy_arn = aws_iam_policy.ec2_stop_start_eventbridge_policy.arn
+}
+
+# -----------------------------------------------------------------------------
+# IAM Role for Lambda to Control EC2 (from your second snippet)
+# -----------------------------------------------------------------------------
+resource "aws_iam_role" "lambda_ec2_control_role" {
+  name               = "${var.stage}-lambda-ec2-control-role" # Added stage prefix
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Action    = "sts:AssumeRole",
+      Effect    = "Allow",
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+  tags = {
+    Name = "${var.stage}-lambda-ec2-control-role"
+  }
+}
+
+resource "aws_iam_policy" "lambda_ec2_control_policy" {
+  name_prefix = "${var.stage}-lambda-ec2-control-policy"
+  policy      = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action   = [
+          "ec2:StartInstances",
+          "ec2:StopInstances"
+        ],
+        Effect   = "Allow",
+        Resource = "*"
+      },
+      {
+        Action   = "logs:*",
+        Effect   = "Allow",
+        Resource = "*" # Consider narrowing this down for production
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_ec2_control_policy_attach" {
+  role       = aws_iam_role.lambda_ec2_control_role.name
+  policy_arn = aws_iam_policy.lambda_ec2_control_policy.arn
 }
