@@ -6,7 +6,6 @@ variable "region" {
 variable "stage" {
   description = "Deployment stage (dev or prod)"
   type        = string
-  default     = "dev"
 }
 
 variable "instance_type" {
