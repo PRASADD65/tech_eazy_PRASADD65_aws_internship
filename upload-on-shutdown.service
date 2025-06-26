@@ -10,7 +10,7 @@ Before=shutdown.target reboot.target umount.target final.target
 Type=oneshot
 # Keep the service state as 'active' (though dead) after execution, for easier debugging with systemctl status
 RemainAfterExit=yes
-
+EnvironmentFile=/etc/default/upload_on_shutdown_env
 # Environment variables for the script.
 # Terraform will substitute ${S3_BUCKET_NAME} and ${STAGE} with the actual values.
 Environment="S3_BUCKET_NAME=${S3_BUCKET_NAME}"
