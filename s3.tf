@@ -33,7 +33,7 @@ resource "aws_s3_bucket_public_access_block" "app_logs_bucket_access_block" {
 # -----------------------------------------------------------------------------
 resource "aws_s3_bucket_lifecycle_configuration" "app_logs_lifecycle_rule" {
   bucket = aws_s3_bucket.app_logs_bucket.id
-
+  depends_on = [aws_s3_bucket.app_logs_bucket]
   rule {
     id     = "delete_old_app_logs"
     status = "Enabled"
