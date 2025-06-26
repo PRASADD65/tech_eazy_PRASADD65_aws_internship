@@ -1,32 +1,32 @@
-resource "aws_instance" "app_server" { # Changed from "techeazy_ec2_app"
-  ami                            = "ami-07891c5a242abf4bc" # Keep your specific AMI ID. Confirm it's valid for your region.
-  instance_type                  = var.instance_type
-  key_name                       = var.key_name
-  associate_public_ip_address    = true
-  vpc_security_group_ids         = [aws_security_group.web_sg.id]
-  user_data_replace_on_change    = true
+resource "aws_instance" "app_server" {
+  ami                         = "ami-07891c5a242abf4bc" # Keep your specific AMI ID. Confirm it's valid for your region.
+  instance_type               = var.instance_type
+  key_name                    = var.key_name
+  associate_public_ip_address = true
+  vpc_security_group_ids      = [aws_security_group.web_sg.id]
+  user_data_replace_on_change = true
 
   # Attach the IAM Instance Profile to this EC2 instance
   iam_instance_profile = aws_iam_instance_profile.app_instance_profile.name
 
-user_data = templatefile("${path.module}/user_data.sh.tpl", {
-    # Ensure this matches the case used in user_data.sh.tpl
-    REPO_URL                        = var.repo_url,
-    S3_BUCKET_NAME                  = var.s3_bucket_name, # CHANGE THIS LINE from s3_bucket_name to S3_BUCKET_NAME
-    STAGE                           = var.stage, # THIS WILL LIKELY BE THE NEXT ONE, SO LET'S CHANGE IT TOO
-    AWS_REGION                      = var.region,
-    AWS_ACCOUNT_ID                  = data.aws_caller_identity.current.account_id
-
-    # Corrected templatefile call for the service content (this part is already correct)
-    upload_on_shutdown_service_content = templatefile("${path.module}/upload-on-shutdown.service", {
-      S3_BUCKET_NAME = var.s3_bucket_name
-      STAGE          = var.stage
-    }),
-
-    upload_on_shutdown_sh_content = file("${path.module}/upload_on_shutdown.sh"),
-    verifyrole1a_sh_content         = file("${path.module}/verifyrole1a.sh"),
-    dockerfile_content              = file("${path.module}/Dockerfile")
+  user_data = templatefile("${path.module}/user_data.sh.tpl", {
+  REPO_URL                     = var.repo_url,
+  S3_BUCKET_NAME               = var.s3_bucket_name,
+  STAGE                        = var.stage,
+  AWS_REGION                   = var.region,
+  AWS_ACCOUNT_ID               = data.aws_caller_identity.current.account_id,
+  REPO_NAME                    = trimsuffix(basename(var.repo_url), ".git"),
+  upload_on_shutdown_service_content = templatefile("${path.module}/upload-on-shutdown.service", {
+    S3_BUCKET_NAME = var.s3_bucket_name,
+    STAGE          = var.stage   
+  }),
+  upload_on_shutdown_sh_content = file("${path.module}/upload_on_shutdown.sh"),
+  verifyrole1a_sh_content       = file("${path.module}/verifyrole1a.sh"),
+  dockerfile_content            = file("${path.module}/Dockerfile")
   })
+  
+  # The explicit self-dependency is NOT needed here anymore for private_ip as it's fetched in user_data.
+  # However, keeping other depends_on as per your original file.
   depends_on = [
     aws_security_group.web_sg,
     aws_iam_instance_profile.app_instance_profile # Ensure IAM profile is created before attaching
@@ -34,13 +34,12 @@ user_data = templatefile("${path.module}/user_data.sh.tpl", {
 
   tags = {
     Name  = "${var.stage}-app-server"
-    Stage = var.stage # Added Stage tag as per our common practice
+    Stage = var.stage
   }
 
-  root_block_device { # Added this block for explicit volume size, good practice
-    volume_size = 20 # Default to 20GB, adjust as needed
+  root_block_device {
+    volume_size = 20
   }
-
 }
 
 
@@ -61,6 +60,24 @@ resource "aws_security_group" "web_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  # --- Ingress rules for Grafana and Prometheus UIs (from previous step) ---
+  ingress {
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # IMPORTANT: Restrict this in production to your IP or known range
+    description = "Allow Grafana UI access"
+  }
+
+  ingress {
+    from_port   = 9090
+    to_port     = 9090
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # IMPORTANT: Restrict this in production to your IP or known range
+    description = "Allow Prometheus UI access"
+  }
+  # --- End Ingress Rules ---
 
   egress {
     from_port   = 0
