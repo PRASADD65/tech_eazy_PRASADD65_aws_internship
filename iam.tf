@@ -28,36 +28,34 @@ resource "aws_iam_role" "ec2_s3_upload_role" {
 # IAM Policy for Role 1.b: S3 Upload Permissions (CreateBucket, PutObject, PutObjectAcl, ListBucket specific)
 resource "aws_iam_policy" "ec2_s3_upload_policy" {
   name_prefix = "${var.stage}-ec2-s3-upload-policy"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      { # Allow creating the bucket and uploading objects within it, specifically under /app/logs/
-        Effect   = "Allow",
-        Action   = [
+      {
+        Effect = "Allow",
+        Action = [
           "s3:CreateBucket",
           "s3:PutObject",
           "s3:PutObjectAcl"
         ],
         Resource = [
-          "arn:aws:s3:::${var.s3_bucket_name}",          # For CreateBucket and general bucket permissions
-          "arn:aws:s3:::${var.s3_bucket_name}/app/logs/shutdown_logs/*" # Specific for logs
+          "arn:aws:s3:::${var.s3_bucket_name}",
+          "arn:aws:s3:::${var.s3_bucket_name}/app/logs/${var.stage}/shutdown_logs/*"
         ]
       },
-      { # Allow listing objects only within the /app/logs/ prefix of the S3 bucket
-        Effect    = "Allow",
-        Action    = [
-          "s3:ListBucket"
-        ],
-        Resource  = "arn:aws:s3:::${var.s3_bucket_name}",
+      {
+        Effect = "Allow",
+        Action = ["s3:ListBucket"],
+        Resource = "arn:aws:s3:::${var.s3_bucket_name}",
         Condition = {
           StringLike = {
-            "s3:prefix" : "app/logs/shutdown_logs/*"
+            "s3:prefix": "app/logs/${var.stage}/shutdown_logs/*"
           }
         }
       },
-      { # Explicitly deny read (GetObject) and download (s3:GetObject) access for the bucket
-        Effect   = "Deny",
-        Action   = [
+      {
+        Effect = "Deny",
+        Action = [
           "s3:GetObject",
           "s3:GetObjectAcl",
           "s3:GetObjectVersion",
@@ -73,7 +71,6 @@ resource "aws_iam_policy" "ec2_s3_upload_policy" {
     ]
   })
 }
-
 # Attach Policy to EC2 S3 Upload Role
 resource "aws_iam_role_policy_attachment" "ec2_s3_upload_policy_attach" {
   role       = aws_iam_role.ec2_s3_upload_role.name
