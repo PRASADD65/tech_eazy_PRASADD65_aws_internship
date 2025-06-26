@@ -1,19 +1,11 @@
-# .github/workflows/deploy.yml
-
 name: Deploy AWS Infrastructure with Terraform
 
 on:
-  # 1. Trigger on push to the 'project3' (your default) and 'master' branches for continuous deployment
   push:
-    branches:
-      - master
-      - project3 # Workflow will also trigger on pushes to 'project3'
-    # 2. Trigger on specific tags for environment deployments (e.g., for production)
     tags:
       - 'deploy-dev'
       - 'deploy-prod'
 
-  # 3. Allow manual triggering from the GitHub Actions UI with inputs
   workflow_dispatch:
     inputs:
       stage:
@@ -23,51 +15,26 @@ on:
         options:
           - dev
           - prod
-      # This input allows you to trigger a  destroy operation manually
-      destroy:
-        description: 'Set to true to DESTROY the infrastructure for the selected stage. USE WITH EXTREME CAUTION!'
-        required: false
-        type: boolean
-        default: false
 
 env:
-  # Define the Terraform version to use across the workflow
   TERRAFORM_VERSION: "1.7.0"
-  # Your AWS region, used by the AWS Credentials action and passed to Terraform init
   AWS_REGION: "ap-south-2"
-  # IMPORTANT: Your actual S3 bucket name for Terraform state
   S3_BACKEND_BUCKET_NAME: "terraform-state-buckettt"
 
 jobs:
-  # =====================================================================
-  # Job to DEPLOY or UPDATE Infrastructure
-  # This job runs ONLY if the 'destroy' input is NOT true (or is not provided/false)
-  # =====================================================================
   deploy_or_update:
-    if: github.event.inputs.destroy != true || github.event.inputs.destroy == ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # id-token: write # Uncomment if using OIDC for AWS authentication
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      # --- NEW DEBUGGING/BUILD STEPS ---
-      - name: Verify Files After Checkout
-        run: ls -l
-        working-directory: ./
 
       - name: Build Lambda Deployment Packages
         run: chmod +x build_lambda_zips.sh && ./build_lambda_zips.sh
         working-directory: ./
 
-      - name: Verify Lambda Zips After Build
-        run: ls -l *.zip
-        working-directory: ./
-      # --- END NEW DEBUGGING/BUILD STEPS ---
-
       - name: Setup Terraform CLI
         uses: hashicorp/setup-terraform@v3
         with:
@@ -79,172 +46,77 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        id: init
-        run: |
-          terraform init \
-            -backend-config="bucket=${{ env.S3_BACKEND_BUCKET_NAME }}" \
-            -backend-config="region=${{ env.AWS_REGION }}"
-        working-directory: ./
 
       - name: Determine Deployment Stage and Select/Create Terraform Workspace
         id: set_stage_and_workspace
         run: |
-          DEPLOY_STAGE=""
           if [[ "${{ github.event_name }}" == "push" ]]; then
             TAG_NAME="${{ github.ref_name }}"
-            if [[ "$TAG_NAME" == "deploy-dev" ]]; then DEPLOY_STAGE="dev"
-            elif [[ "$TAG_NAME" == "deploy-prod" ]]; then DEPLOY_STAGE="prod"
-            elif [[ "$TAG_NAME" == "master" || "$TAG_NAME" == "project3" ]]; then
-              echo "Push to master or project3 branch without a deploy tag. Defaulting to 'dev' stage."
-              DEPLOY_STAGE="dev"
+            if [[ "$TAG_NAME" == "deploy-dev" ]]; then STAGE="dev"
+            elif [[ "$TAG_NAME" == "deploy-prod" ]]; then STAGE="prod"
             else
-              echo "Unsupported push event or tag name. Exiting.";
-              exit 1;
+              echo "Unsupported tag name. Exiting."; exit 1;
             fi
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            DEPLOY_STAGE="${{ github.event.inputs.stage }}"
+            STAGE="${{ github.event.inputs.stage }}"
           fi
 
-          if [[ -z "$DEPLOY_STAGE" ]]; then
-            echo "ERROR: Deployment stage could not be determined. Exiting.";
-            exit 1;
-          fi
-          echo "--> Determined Deployment Stage: $DEPLOY_STAGE"
-          echo "STAGE=$DEPLOY_STAGE" >> $GITHUB_ENV
+          echo "STAGE=$STAGE" >> $GITHUB_ENV
 
-          echo "--> Checking for Terraform workspace: $DEPLOY_STAGE"
-          if terraform workspace list | grep -q "^* ${DEPLOY_STAGE}$" || terraform workspace list | grep -q "  ${DEPLOY_STAGE}$"; then
-            echo "--> Selecting existing workspace: $DEPLOY_STAGE"
-            terraform workspace select "$DEPLOY_STAGE"
+          terraform init \
+            -backend-config="bucket=${{ env.S3_BACKEND_BUCKET_NAME }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="key=terraform/${STAGE}/terraform.tfstate"
+
+          if terraform workspace list | grep -q " ${STAGE}$"; then
+            terraform workspace select "$STAGE"
           else
-            echo "--> Creating new workspace: $DEPLOY_STAGE"
-            terraform workspace new "$DEPLOY_STAGE"
+            terraform workspace new "$STAGE"
           fi
         working-directory: ./
 
+      - name: Select tfvars file for stage
+        run: |
+          if [[ "$STAGE" == "dev" ]]; then
+            TFVARS_FILE="dev.tfvars"
+          elif [[ "$STAGE" == "prod" ]]; then
+            TFVARS_FILE="prod.tfvars"
+          else
+            echo "Unknown stage $STAGE"; exit 1
+          fi
+          echo "TFVARS_FILE=$TFVARS_FILE" >> $GITHUB_ENV
+
       - name: Terraform Validate
-        id: validate
         run: terraform validate
         working-directory: ./
 
       - name: Terraform Plan
-        id: plan
-        run: terraform plan -out=tfplan
+        run: terraform plan -var-file=${{ env.TFVARS_FILE }} -out=tfplan
         working-directory: ./
 
       - name: Terraform Apply
-        id: apply
-        if: github.ref_name == 'master' || startsWith(github.ref_name, 'deploy-') || github.ref_name == 'project3'
         run: terraform apply -auto-approve tfplan
         working-directory: ./
 
       - name: Get EC2 Public IP/DNS
-        id: get_ip
         run: |
           PUBLIC_IP=$(terraform output -raw instance_public_ip)
           if [ -z "$PUBLIC_IP" ]; then
-            echo "ERROR: No public IP found. Cannot proceed with health check.";
-            exit 1;
+            echo "ERROR: No public IP found."; exit 1;
           fi
           echo "EC2_PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
-          echo "--> Public IP of EC2 instance: $PUBLIC_IP"
         working-directory: ./
-        env: # These are already configured at the job level, but explicitly passing again for clarity
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ env.AWS_REGION }}
 
       - name: Validate Application Health Post-Deployment
         if: success() && env.EC2_PUBLIC_IP != ''
         run: |
-          echo "--> Starting health check for application at http://${{ env.EC2_PUBLIC_IP }}:80..."
-          MAX_RETRIES=20
-          RETRY_INTERVAL=15
-          CURRENT_RETRY=0
-          while [ $CURRENT_RETRY -lt $MAX_RETRIES ]; do
-            echo "Attempt $((CURRENT_RETRY + 1)) of $MAX_RETRIES..."
-            # Capture curl's output AND its exit status
-            STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 20 "http://${{ env.EC2_PUBLIC_IP }}:80")
-            CURL_EXIT_CODE=$? # Capture the exit code of the last command (curl)
-
-            # Check both curl's exit code (0 for success) and HTTP status code
-            if [ "$CURL_EXIT_CODE" -eq 0 ] && [ "$STATUS_CODE" -eq 200 ]; then
-              echo "--> SUCCESS: Application reachable (HTTP 200 OK).";
-              exit 0 # Exit the step successfully
-            else
-              echo "--> Port 80 not yet reachable (HTTP Status: $STATUS_CODE, Curl Exit Code: $CURL_EXIT_CODE). Retrying in $RETRY_INTERVAL seconds..."
-              sleep $RETRY_INTERVAL
-              CURRENT_RETRY=$((CURRENT_RETRY + 1))
+          echo "Checking health at http://${{ env.EC2_PUBLIC_IP }}:80..."
+          for i in {1..20}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ env.EC2_PUBLIC_IP }}:80")
+            if [ "$STATUS" -eq 200 ]; then
+              echo "App is healthy (HTTP 200)."; exit 0;
             fi
+            echo "Retry $i: Not ready (HTTP $STATUS). Waiting..."; sleep 15;
           done
-          echo "ERROR: Application did not become reachable."
-          exit 1 # Exit the step with a failure
-
-  # =====================================================================
-  # Job to DESTROY Infrastructure
-  # This job runs ONLY if the 'destroy' input is set to 'true'
-  # =====================================================================
-  destroy_infrastructure:
-    if: github.event.inputs.destroy == true
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform CLI
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init (for Destroy)
-        id: init_destroy
-        run: |
-          terraform init \
-            -backend-config="bucket=${{ env.S3_BACKEND_BUCKET_NAME }}" \
-            -backend-config="region=${{ env.AWS_REGION }}"
-        working-directory: ./
-
-      - name: Determine Stage and Select Terraform Workspace for Destroy
-        id: set_stage_for_destroy
-        run: |
-          DESTROY_STAGE="${{ github.event.inputs.stage }}"
-          if [[ -z "$DESTROY_STAGE" ]]; then
-            echo "ERROR: No stage selected for destroy operation. Exiting.";
-            exit 1;
-          fi
-          echo "--> Determined Stage for Destroy: $DESTROY_STAGE"
-          echo "STAGE=$DESTROY_STAGE" >> $GITHUB_ENV
-
-          echo "--> Selecting Terraform workspace: $DESTROY_STAGE for destroy operation."
-          if terraform workspace list | grep -q "^* ${DESTROY_STAGE}$" || terraform workspace list | grep -q "  ${DESTROY_STAGE}$"; then
-            terraform workspace select "$DESTROY_STAGE"
-          else
-            echo "ERROR: Workspace '$DESTROY_STAGE' does not exist. Cannot destroy non-existent resources."
-            exit 1
-          fi
-        working-directory: ./
-
-      - name: Terraform Destroy
-        id: destroy_action
-        run: |
-          echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-          echo "!!! WARNING: Initiating terraform destroy for stage: ${{ env.STAGE }} !!!"
-          echo "!!! This will PERMANENTLY DELETE ALL ALL RESOURCES in this workspace. !!!"
-          echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-          echo "Pausing for 10 seconds. Press Ctrl+C in your terminal if this was a mistake."
-          sleep 10
-          terraform destroy -auto-approve
-          echo "--> Terraform destroy command executed for workspace: ${{ env.STAGE }}"
+          echo "App did not become healthy."; exit 1;
         working-directory: ./
