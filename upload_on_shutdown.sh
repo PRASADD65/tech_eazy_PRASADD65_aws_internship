@@ -18,8 +18,11 @@ echo "--- Script started for shutdown log upload ($(date +%Y%m%d_%H%M%S)) ---"
 # Ensure these environment variables are exported by the user data script.
 
 APP_LOG_FILE="${LOG_DIR_HOST}/application.log"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S_shutdown) # Add _shutdown to distinguish
-S3_OBJECT_KEY="app/logs/shutdown_logs/application_log_${TIMESTAMP}.log" # Unique path for shutdown logs
+TIMESTAMP=$(date +%Y%m%d_%H%M%S_shutdown)
+S3_OBJECT_KEY="app/logs/${STAGE}/shutdown_logs/application_log_${TIMESTAMP}.log"
+
+echo "Source Log File: ${APP_LOG_FILE}"
+echo "Target S3 Path: s3://${S3_BUCKET_NAME}/${S3_OBJECT_KEY}"
 
 echo "Source Log File: ${APP_LOG_FILE}"
 echo "Target S3 Path: s3://${S3_BUCKET_NAME}/${S3_OBJECT_KEY}"
