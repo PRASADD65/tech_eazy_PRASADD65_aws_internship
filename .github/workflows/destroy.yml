@@ -1,20 +1,15 @@
-# .github/workflows/destroy.yml
-name: Destroy AWS Infrastructure
+name: Destroy AWS Infrastructure with Terraform
 
 on:
   workflow_dispatch:
     inputs:
       stage:
-        description: 'Select Stage to DESTROY (dev or prod)'
+        description: 'Select Deployment Stage (dev or prod)'
         required: true
         type: choice
         options:
           - dev
           - prod
-      confirm_destroy:
-        description: 'Type "destroy" to confirm permanent infrastructure deletion.'
-        required: true
-        type: string
 
 env:
   TERRAFORM_VERSION: "1.7.0"
@@ -31,15 +26,15 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # --- ADD THESE BUILD STEPS HERE ---
+      # Optional: Build Lambda zip files if you use Lambda functions
       - name: Build Lambda Deployment Packages
         run: chmod +x build_lambda_zips.sh && ./build_lambda_zips.sh
         working-directory: ./
+        continue-on-error: true
 
-      - name: Verify Lambda Zips After Build (Optional - for debugging)
-        run: ls -l *.zip
+      - name: Verify Lambda Zips After Build (Optional)
+        run: ls -l *.zip || true
         working-directory: ./
-      # --- END ADDITION ---
 
       - name: Setup Terraform CLI
         uses: hashicorp/setup-terraform@v3
@@ -53,51 +48,32 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Confirm Destruction Input
+      - name: Determine Deployment Stage and Select/Create Terraform Workspace
+        id: set_stage_and_workspace
         run: |
-          if [ "${{ github.event.inputs.confirm_destroy }}" != "destroy" ]; then
-            echo "ERROR: Destruction not confirmed. You must type 'destroy' in the confirmation input."
-            exit 1
-          fi
-        shell: bash
+          STAGE="${{ github.event.inputs.stage }}"
+          echo "STAGE=$STAGE" >> $GITHUB_ENV
 
-      - name: Terraform Init (for Destroy)
-        id: init_destroy
-        run: |
           terraform init \
             -backend-config="bucket=${{ env.S3_BACKEND_BUCKET_NAME }}" \
-            -backend-config="region=${{ env.AWS_REGION }}"
-        working-directory: ./
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="key=terraform/${STAGE}/terraform.tfstate"
 
-      - name: Determine Stage and Select Terraform Workspace for Destroy
-        id: set_stage_for_destroy
-        run: |
-          DESTROY_STAGE="${{ github.event.inputs.stage }}"
-          if [[ -z "$DESTROY_STAGE" ]]; then
-            echo "ERROR: No stage selected for destroy operation. Exiting.";
-            exit 1;
-          fi
-          echo "--> Determined Stage for Destroy: $DESTROY_STAGE"
-          echo "STAGE=$DESTROY_STAGE" >> $GITHUB_ENV
-
-          echo "--> Selecting Terraform workspace: $DESTROY_STAGE for destroy operation."
-          if terraform workspace list | grep -q "^* ${DESTROY_STAGE}$" || terraform workspace list | grep -q "  ${DESTROY_STAGE}$"; then
-            terraform workspace select "$DESTROY_STAGE"
+          if terraform workspace list | grep -q " ${STAGE}$"; then
+            terraform workspace select "$STAGE"
           else
-            echo "ERROR: Workspace '$DESTROY_STAGE' does not exist. Cannot destroy non-existent resources."
-            exit 1
+            terraform workspace new "$STAGE"
           fi
         working-directory: ./
 
-      - name: Terraform Destroy
-        id: destroy_action
-        run: |
-          echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-          echo "!!! WARNING: Initiating terraform destroy for stage: ${{ env.STAGE }} !!!"
-          echo "!!! This will PERMANENTLY DELETE ALL ALL RESOURCES in this workspace. !!!"
-          echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-          echo "Pausing for 10 seconds. Press Ctrl+C in your terminal if this was a mistake."
-          sleep 10
-          terraform destroy -auto-approve
-          echo "--> Terraform destroy command executed for workspace: ${{ env.STAGE }}"
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: ./
+
+      - name: Terraform Plan Destroy
+        run: terraform plan -destroy -out=tfplan -var-file=${{ github.event.inputs.stage }}.tfvars
+        working-directory: ./
+
+      - name: Terraform Apply Destroy
+        run: terraform apply -auto-approve tfplan
         working-directory: ./
