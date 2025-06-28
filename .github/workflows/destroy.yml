@@ -12,8 +12,9 @@ on:
           - prod
 
 env:
-  TERRAFORM_VERSION: "1.7.0"
+  TERRAFORM_VERSION: "1.7.5"
   AWS_REGION: "ap-south-2"
+  AWS_SDK_LOAD_CONFIG: "1"
   S3_BACKEND_BUCKET_NAME: "terraform-state-buckettt"
 
 jobs:
@@ -21,12 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    timeout-minutes: 30
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Optional: Build Lambda zip files if you use Lambda functions
       - name: Build Lambda Deployment Packages
         run: chmod +x build_lambda_zips.sh && ./build_lambda_zips.sh
         working-directory: ./
@@ -71,9 +72,13 @@ jobs:
         working-directory: ./
 
       - name: Terraform Plan Destroy
-        run: terraform plan -destroy -out=tfplan -var-file=${{ github.event.inputs.stage }}.tfvars
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: terraform plan -destroy -out=tfplan -var-file=${{ env.STAGE }}.tfvars -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}"
         working-directory: ./
 
       - name: Terraform Apply Destroy
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         run: terraform apply -auto-approve tfplan
         working-directory: ./
