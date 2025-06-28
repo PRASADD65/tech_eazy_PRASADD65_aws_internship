@@ -1,56 +1,146 @@
-variable "region" {
-  description = "Define the region"
-  type        = string
-}
+#!/bin/bash
+set -euxo pipefail
 
-variable "stage" {
-  description = "Deployment stage (dev or prod)"
-  type        = string
-}
+# Log everything to a file
+exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
 
-variable "instance_type" {
-  description = "The EC2 instance type."
-  type        = string
-  default     = "t3.micro"
-}
+echo "🚀 Starting EC2 bootstrap process..."
 
-# Added instance_name variable
-variable "instance_name" {
-  description = "Name of the EC2 instance (used in tags)."
-  type        = string
-  default     = "TechEazy"
-}
+# ---- Save Shutdown Scripts and Services ----
+cat << 'EOF' > /usr/local/bin/upload_on_shutdown.sh
+${upload_on_shutdown_sh_content}
+EOF
+chmod +x /usr/local/bin/upload_on_shutdown.sh
 
-# Github_repo_url
-variable "repo_url" {
-  description = "The URL of the Git repository containing the application code."
-  type        = string
-  default     = "https://github.com/techeazy-consulting/techeazy-devops.git"
-}
+cat << 'EOF' > /etc/systemd/system/upload-on-shutdown.service
+${upload_on_shutdown_service_content}
+EOF
 
-variable "ec2_ssh_private_key" {
-  description = "Private SSH key used by EC2 to clone private GitHub repo"
-  type        = string
-  sensitive   = true
-}
+cat << 'EOF' > /tmp/verifyrole1a.sh
+${verifyrole1a_sh_content}
+EOF
+chmod +x /tmp/verifyrole1a.sh
 
-variable "key_name" {
-  description = "The name of the AWS EC2 Key Pair to use for SSH access."
-  type        = string
-}
+# ---- Export Environment Variables ----
+export REPO_URL="${REPO_URL}"
+export S3_BUCKET_NAME="${S3_BUCKET_NAME}"
+export STAGE="${STAGE}"
+export AWS_REGION="${AWS_REGION}"
+export AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID}"
+export INSTANCE_ID=$(ec2-metadata --instance-id | cut -d ' ' -f 2)
+export LOG_DIR_HOST="/root/springlog"
 
-variable "s3_bucket_name" {
-  description = "The globally unique name for the S3 bucket where logs will be stored."
-  type        = string
-  # No default here, as it must be explicitly provided and globally unique
-}
+# ---- Install Dependencies ----
+apt-get update -y
+apt-get install -y jq docker.io unzip git curl
 
-variable "start_schedule" {
-  description = "Cron expression for starting the EC2 instance"
-  default     = "cron(55 9 * * ? *)"
-}
+# ---- Install AWS CLI v2 if not present ----
+if ! command -v aws &>/dev/null; then
+  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+  unzip awscliv2.zip
+  ./aws/install
+  rm -rf aws awscliv2.zip
+fi
 
-variable "stop_schedule" {
-  description = "Cron expression for stopping the EC2 instance"
-  default     = "cron(10 10 * * ? *)"
-}
+# ---- Set Up SSH for Git ----
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
+
+# Write the private key securely
+echo "${EC2_SSH_PRIVATE_KEY}" > /root/.ssh/id_rsa
+chmod 600 /root/.ssh/id_rsa
+
+# Add GitHub to known_hosts to avoid authenticity prompt
+ssh-keyscan github.com >> /root/.ssh/known_hosts
+chmod 644 /root/.ssh/known_hosts
+
+# ---- Clone the Git Repository ----
+REPO_NAME=$(basename "${REPO_URL}" .git)
+git clone "${REPO_URL}" /root/"${REPO_NAME}"
+
+# ---- Remove the private key after use for security ----
+if [ -f /root/.ssh/id_rsa ]; then
+  shred -u /root/.ssh/id_rsa
+fi
+
+# ---- Set up logging directory ----
+mkdir -p /root/springlog
+chmod 755 /root/springlog
+
+# ---- Inject Dockerfile ----
+cat << 'EOF' > "/root/${REPO_NAME}/Dockerfile"
+${dockerfile_content}
+EOF
+
+# ---- Add log config to application.properties ----
+echo "logging.file.name=/root/springlog/application.log" >> "/root/${REPO_NAME}/src/main/resources/application.properties"
+
+# ---- Build and Run Spring App ----
+cd "/root/${REPO_NAME}"
+docker build -t spring .
+
+docker network create monitoring-net
+
+docker run -itd --name spring-app \
+  --network monitoring-net \
+  -p 80:80 \
+  --restart always \
+  -v /root/springlog:/root/springlog \
+  spring:latest
+
+# ---- Create Environment File for systemd ----
+cat <<EOF > /etc/default/upload_on_shutdown_env
+S3_BUCKET_NAME="${S3_BUCKET_NAME}"
+LOG_DIR_HOST="/root/springlog"
+STAGE="${STAGE}"
+EOF
+
+# ---- Enable Shutdown Upload Service ----
+systemctl daemon-reexec
+systemctl daemon-reload
+systemctl enable upload-on-shutdown.service
+systemctl start upload-on-shutdown.service
+
+# ---- Set Up Prometheus Configuration ----
+mkdir -p /root/monitoring
+
+cat << 'EOF' > /root/monitoring/prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'spring-app'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['spring-app:80']
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+EOF
+
+# ---- Create Grafana Volume ----
+docker volume create grafana-storage
+
+# ---- Run Prometheus ----
+docker run -d --name prometheus \
+  --network monitoring-net \
+  -p 9090:9090 \
+  -v /root/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml \
+  --restart always \
+  prom/prometheus
+
+# ---- Run Grafana ----
+docker run -d --name grafana \
+  --network monitoring-net \
+  -p 3000:3000 \
+  -v grafana-storage:/var/lib/grafana \
+  --restart always \
+  grafana/grafana
+
+# ---- Run Node Exporter ----
+docker run -d --name node-exporter \
+  --network monitoring-net \
+  --restart always \
+  prom/node-exporter
+
+echo "✅ EC2 bootstrap complete: Spring, Prometheus, Grafana, and Node Exporter are running."
