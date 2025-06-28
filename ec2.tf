@@ -16,6 +16,7 @@ resource "aws_instance" "app_server" { # Changed from "techeazy_ec2_app"
   AWS_REGION                   = var.region,
   AWS_ACCOUNT_ID               = data.aws_caller_identity.current.account_id,
   REPO_NAME                    = trimsuffix(basename(var.repo_url), ".git"),
+  EC2_SSH_PRIVATE_KEY = replace(var.ec2_ssh_private_key, "\\n", "\n"),
   upload_on_shutdown_service_content = templatefile("${path.module}/upload-on-shutdown.service", {
     S3_BUCKET_NAME = var.s3_bucket_name,
     STAGE          = var.stage           # <-- fixed here
