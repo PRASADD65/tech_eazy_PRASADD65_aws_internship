@@ -10,7 +10,7 @@ stage         = "dev"      # Defines the environment/stage
 # S3 Bucket and Log Backup Configuration
 # <<< IMPORTANT: REPLACE WITH A GLOBALLY UNIQUE S3 BUCKET NAME >>>
 # This name MUST be unique across ALL of AWS S3.
-s3_bucket_name = "techeazy-project2-buckett"
+s3_bucket_name = "dev-techeazy-project2-buckett"
 
 # Instance Schedule (Cron Format)
 # These map to 'start_schedule' and 'stop_schedule' in variables.tf
