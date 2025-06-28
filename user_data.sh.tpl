@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euxo pipefail
+set -uxo pipefail
 
 # Log everything to a file
 exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
@@ -34,6 +34,10 @@ export LOG_DIR_HOST="/root/springlog"
 apt-get update -y
 apt-get install -y jq docker.io unzip git curl
 
+systemctl enable docker
+systemctl start docker
+sleep 3
+
 # ---- Install AWS CLI v2 if not present ----
 if ! command -v aws &>/dev/null; then
   curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
@@ -66,14 +70,6 @@ fi
 # ---- Set up logging directory ----
 mkdir -p /root/springlog
 chmod 755 /root/springlog
-
-# ---- Inject Dockerfile ----
-cat << 'EOF' > "/root/${REPO_NAME}/Dockerfile"
-${dockerfile_content}
-EOF
-
-# ---- Add log config to application.properties ----
-echo "logging.file.name=/root/springlog/application.log" >> "/root/${REPO_NAME}/src/main/resources/application.properties"
 
 # ---- Build and Run Spring App ----
 cd "/root/${REPO_NAME}"
