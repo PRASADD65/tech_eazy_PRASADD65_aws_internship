@@ -17,8 +17,9 @@ on:
           - prod
 
 env:
-  TERRAFORM_VERSION: "1.7.0"
+  TERRAFORM_VERSION: "1.7.5"
   AWS_REGION: "ap-south-2"
+  AWS_SDK_LOAD_CONFIG: "1"
   S3_BACKEND_BUCKET_NAME: "terraform-state-buckettt"
 
 jobs:
@@ -26,6 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    timeout-minutes: 30
 
     steps:
       - name: Checkout Repository
@@ -91,12 +93,16 @@ jobs:
         working-directory: ./
 
       - name: Terraform Plan
-        run: terraform plan -var-file=${{ env.TFVARS_FILE }} -out=tfplan
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: terraform plan -var-file=${{ env.TFVARS_FILE }} -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan
         working-directory: ./
 
       - name: Terraform Apply
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         run: terraform apply -auto-approve tfplan
-        working-directory: ./
+        working-directory: ./ 
 
       - name: Get EC2 Public IP/DNS
         run: |
@@ -107,16 +113,24 @@ jobs:
           echo "EC2_PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
         working-directory: ./
 
+      - name: Get EC2 Public IP
+        id: get_ip
+        run: |
+          IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${{ env.STAGE }}-app-server" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].PublicIpAddress" \
+            --output text)
+          echo "EC2_PUBLIC_IP=$IP" >> $GITHUB_ENV
+
       - name: Validate Application Health Post-Deployment
         if: success() && env.EC2_PUBLIC_IP != ''
         run: |
-          echo "Checking health at http://${{ env.EC2_PUBLIC_IP }}:80..."
-          for i in {1..20}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ env.EC2_PUBLIC_IP }}:80")
-            if [ "$STATUS" -eq 200 ]; then
-              echo "App is healthy (HTTP 200)."; exit 0;
-            fi
-            echo "Retry $i: Not ready (HTTP $STATUS). Waiting..."; sleep 15;
-          done
-          echo "App did not become healthy."; exit 1;
-        working-directory: ./
+            echo "Checking health at http://${{ env.EC2_PUBLIC_IP }}/actuator/health..."
+            for i in {1..40}; do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ env.EC2_PUBLIC_IP }}/actuator/health")
+              if [ "$STATUS" -eq 200 ]; then
+                 echo "App is healthy (HTTP 200)."; exit 0;
+              fi
+                 echo "Retry $i: Not ready (HTTP $STATUS). Waiting..."; sleep 30;
+            done
+            echo "App did not become healthy."; exit 1;
