@@ -23,7 +23,6 @@ resource "aws_instance" "app_server" { # Changed from "techeazy_ec2_app"
   }),
   upload_on_shutdown_sh_content = file("${path.module}/upload_on_shutdown.sh"),
   verifyrole1a_sh_content       = file("${path.module}/verifyrole1a.sh"),
-  dockerfile_content            = file("${path.module}/Dockerfile")
   })
   
   # The explicit self-dependency is NOT needed here anymore for private_ip as it's fetched in user_data.
