@@ -272,7 +272,7 @@ terraform apply
 terraform destroy
 ```
 
-**Output**
+**Outputs**
 - Test your spring boot application:
 Open you web browser. search
 ```
@@ -282,8 +282,18 @@ Open you web browser. search
 - A S3 bucket with stage name to store the log when the ec2 will stop with after 7 days log delete Lifecycle policy. 
 - To test log upload to s3, stop the EC2 by cron job or manually.
 - For quick test manually stop the ec2 and test the S3 bucket - Go to your-bucket - /app/logs/shutdown_logs/application_log_<logid>_shutdown.log
-- If in the 1st attempt the logs does not upload to the S3, start your ec2 again and wait until the application boot. Once the application is online, stop the instance and check your S3        bucket.
-    
+- If in the 1st attempt the logs does not upload to the S3, start your ec2 again and wait until the application boot. Once the application is online, stop the instance and 
+  check your S3 bucket.
+- On push to main/master or tag like deploy-dev/deploy-prod, trigger workflow.
+- Support Stage-Based Deployments to support different stages (e.g., dev, qa, prod).
+- Stage parameters can be pass via GitHub Action input. Select dev for development env and prod for production env.
+- Private/Public GitHub Config Handling. Support Public/Private Config Sources. dev stage will fetch from a public GitHub repo. prod stage will fetch from a private GitHub 
+  repo.
+- GitHub Token Handling. For private repo access, read a deploy key from GitHub Actions Secrets. Ensure the key will be passed securely to EC2 or Terraform during provisioning if needed.
+- Post-Deployment Health Check. Automatically check that the application is reachable. Poll the frontend on port 80 of EC2's public IP.
+
+---
+
 ## ⚠️ Notes
 
 - Terraform will **fail** if `bucket_name` is not provided  
@@ -307,5 +317,5 @@ Open you web browser. search
  - The .github/workflow/destroy.yml file will be responsible for destory the infrastructure.
  - the infrastructures will be managed with different different workspace to maintain the infrastructure as per stage, eg. dev or prod.
  - Set the stage dev/prod on the Run workflow "Deploy in the AWS Infrastructure with Terraform workflow" to deploy the infrastructure.
- - Type "destroy" in the Run workflow in the "Destroy AWS destroy infrastructure workflow" to destroy the infrastructure.
- - You have to manually type "destroy" to prevent accidental delete of infrastructure.
+ - Set the stage dev/prod in the Run workflow in the "Destroy AWS destroy infrastructure workflow" to destroy the infrastructure.
+ 
