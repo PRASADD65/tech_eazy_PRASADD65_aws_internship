@@ -1,7 +1,10 @@
 #!/bin/bash
-set -e
+set -euxo pipefail
 
-echo "Starting EC2 bootstrap process..."
+# Log everything to a file
+exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
+
+echo "🚀 Starting EC2 bootstrap process..."
 
 # ---- Save Shutdown Scripts and Services ----
 cat << 'EOF' > /usr/local/bin/upload_on_shutdown.sh
@@ -31,36 +34,53 @@ export LOG_DIR_HOST="/root/springlog"
 apt-get update -y
 apt-get install -y jq docker.io unzip git curl
 
-# Install AWS CLI v2 if not present
-if ! command -v aws &> /dev/null; then
+# ---- Install AWS CLI v2 if not present ----
+if ! command -v aws &>/dev/null; then
   curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
   unzip awscliv2.zip
   ./aws/install
   rm -rf aws awscliv2.zip
 fi
 
-# ---- Set Up Logging Directory ----
-mkdir -p /root/springlog
+# ---- Set Up SSH for Git ----
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
 
-# ---- Clone Repo and Build Spring App Image ----
+# Write the private key securely
+echo "${EC2_SSH_PRIVATE_KEY}" > /root/.ssh/id_rsa
+chmod 600 /root/.ssh/id_rsa
+
+# Add GitHub to known_hosts to avoid authenticity prompt
+ssh-keyscan github.com >> /root/.ssh/known_hosts
+chmod 644 /root/.ssh/known_hosts
+
+# ---- Clone the Git Repository ----
 REPO_NAME=$(basename "${REPO_URL}" .git)
-git clone "${REPO_URL}" /root/"$REPO_NAME"
+git clone "${REPO_URL}" /root/"${REPO_NAME}"
 
-# Inject Dockerfile
-cat << 'EOF' > "/root/$REPO_NAME/Dockerfile"
+# ---- Remove the private key after use for security ----
+if [ -f /root/.ssh/id_rsa ]; then
+  shred -u /root/.ssh/id_rsa
+fi
+
+# ---- Set up logging directory ----
+mkdir -p /root/springlog
+chmod 755 /root/springlog
+
+# ---- Inject Dockerfile ----
+cat << 'EOF' > "/root/${REPO_NAME}/Dockerfile"
 ${dockerfile_content}
 EOF
 
-# Add log config to application.properties
-echo "logging.file.name=/root/springlog/application.log" >> "/root/$REPO_NAME/src/main/resources/application.properties"
+# ---- Add log config to application.properties ----
+echo "logging.file.name=/root/springlog/application.log" >> "/root/${REPO_NAME}/src/main/resources/application.properties"
 
-cd "/root/$REPO_NAME"
+# ---- Build and Run Spring App ----
+cd "/root/${REPO_NAME}"
 docker build -t spring .
 
-# ---- Create Docker Network ----
 docker network create monitoring-net
 
-# ---- Run Spring App Container ----
 docker run -itd --name spring-app \
   --network monitoring-net \
   -p 80:80 \
@@ -122,6 +142,5 @@ docker run -d --name node-exporter \
   --network monitoring-net \
   --restart always \
   prom/node-exporter
-
 
 echo "✅ EC2 bootstrap complete: Spring, Prometheus, Grafana, and Node Exporter are running."
