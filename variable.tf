@@ -28,6 +28,12 @@ variable "repo_url" {
   default     = "https://github.com/techeazy-consulting/techeazy-devops.git"
 }
 
+variable "ec2_ssh_private_key" {
+  description = "Private SSH key used by EC2 to clone private GitHub repo"
+  type        = string
+  sensitive   = true
+}
+
 variable "key_name" {
   description = "The name of the AWS EC2 Key Pair to use for SSH access."
   type        = string
