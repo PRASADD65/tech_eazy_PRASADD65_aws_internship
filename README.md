@@ -19,7 +19,7 @@ This project automates the provisioning of key AWS infrastructure components usi
 
 - **Infrastructure as Code**: Terraform  
 - **Cloud Provider**: AWS
-- **Cloud tools**: EC2, VPC, IAM, S3, Cloudwatch Event Bridge, Lambda
+- **Cloud tools**: EC2, IAM, S3, Cloudwatch Event Bridge, Lambda, Cloud watch, SNS, Grafana, Prometheus
 - **Scripts**: Bash (Shell), systemd  
 - **CLI Tools**: AWS CLI
 - **Containerizaton**: Docker
@@ -35,11 +35,13 @@ tech_eazy_PRASADD65_aws_internship/
    |     ├── workflows
    |          └── deploy.yml
    |          └── destroy.yml
-   ├── Dockerfile
    ├── build_lambda_zips.sh
+   ├── CloudWatchAlarm.tf
    ├── cloudwatcheventrule.tf
+   ├── backend.tf
    ├── ec2.tf
    ├── iam.tf
+   ├── dev.tfvars
    ├── lambdafunction.tf
    ├── lambdapermission.tf
    ├── output.tf
@@ -48,8 +50,9 @@ tech_eazy_PRASADD65_aws_internship/
    ├── start_instance.zip
    ├── stop_instance.py
    ├── stop_instance.zip
+   ├── sns.tf
    ├── terraform.tf
-   ├── terraform.tfvars
+   ├── prod.tfvars
    ├── upload-on-shutdown.service
    ├── upload_on_shutdown.sh
    ├── user_data.sh.tpl
@@ -100,9 +103,13 @@ All automation scripts are located in the `scripts/` folder:
 - `upload_on_shutdown.sh`: Uploads logs to S3  
 - `upload_on_shutdown.service`: systemd unit that runs `logupload.sh` on shutdown  
 - `user_data.sh.tpl`: To handle all the internal configurations and their functions.
+- Install CloudWatch Agent, Create CloudWatch Agent config and start the CloudWatch Agent.
+- Install docker to handle Java Spring Boot app, Grafana, Prometheus containers
+- Install all the dependency files for this project.
 ---
 
 ## 🚀 How to Deploy 
+# 2 ways to deploy - Manual, CI/Ccd
 **Manual** 
 
 we will have following procedures to perform this assignment:
@@ -228,10 +235,13 @@ cd tech_eazy_PRASADD65_aws_internship
 ## Variables inputs on terraform.tfvars
 - Region (can be vary as per requirement)
 - Instance type
+- Instance ID
 - Key name (must available on that region on AWS console)
 - stage (prod/dev)
 - VPC (Not requried as we are using default VPC)
 - S3 bucket name (most important or else terraform will not initilize the infrastructure)
+- Github repo URL (pub/pvt) for the terraform provisioned ec2.
+- Email ID for SNS topic alart subscriptions
 - EC2 start time - in cron job format - (45 22 * * ? *) 
 - EC2 stop time - in cron job format - (45 22 * * ? * ) (Cron job formats are should be in UTC time zone, as per EventBridge works on UTC format)
   - Example Scenarios:
@@ -278,6 +288,12 @@ Open you web browser. search
 ```
 <EC2 public-ip>:80  - wait for some time, as it may take some time to boot the application.
 ```
+```
+<EC2 public-ip>:9090  - for Promethus. To monitor the node and the spring app health condition.
+```
+```
+<EC2 public-ip>:3000  - for Grafana. To monitor the node and the spring app health condition.
+```
 - lambda functions, Eventbridge - <stage>-ec2-start/stop rule to automate the ec2 scheduled start and stop for cost saving.
 - A S3 bucket with stage name to store the log when the ec2 will stop with after 7 days log delete Lifecycle policy. 
 - To test log upload to s3, stop the EC2 by cron job or manually.
@@ -291,6 +307,11 @@ Open you web browser. search
   repo.
 - GitHub Token Handling. For private repo access, read a deploy key from GitHub Actions Secrets. Ensure the key will be passed securely to EC2 or Terraform during provisioning if needed.
 - Post-Deployment Health Check. Automatically check that the application is reachable. Poll the frontend on port 80 of EC2's public IP.
+- Cloud watch to Stream application logs from EC2 to CloudWatch Logs. You will see two logs ID, ec2-syslog for all the logs of ec2, spring-app-logs for spring application's log.
+- CloudWatch Alarm on error patterns or instance health.
+- SNS topic to send email notifications when the app will have ERROR / "Exception.
+- Subscribe the SNS subscription to receive the email notifications.
+- For test the error email alart manually, ssh into your ec2 and run echo "ERROR: Simulated failure on $(date)" >> /root/springlog/application.log
 
 ---
 
@@ -301,6 +322,10 @@ Open you web browser. search
 - EC2 requires **internet access** to install AWS CLI
 - EC2 start time - cron(45 22 * * ? *) (As per your requirement)
 - EC2 stop time  - cron(45 22 * * ? *)   (As per your requirement)
+- Provide the ec2 ami id as per the region
+- Provide your email id to receive SNS topic subscription and scuscribe it to receive the email notifications.
+- Provide the private key in your GitHub account's secrets in order to access git private repo form prod env.
+- Set the public keyson the private GitHub account's Deploy keys in order to ec2 can access this private repo. 
 - It might take some time to display the spring boot application on browser. Wait for the EC2 to complete it's initializing process.
 - The 1st CI/CD will show you build failed. No need to worry, it is just the health check error of the spring boot application, as the spring boot app takes some time to boot. Rest, all the infrastructre is ready to do it's task. On the further commits the health check error will be reslove and you will see the green check mark.
 
