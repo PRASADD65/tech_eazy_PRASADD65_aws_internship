@@ -109,7 +109,7 @@ All automation scripts are located in the `scripts/` folder:
 ---
 
 ## 🚀 How to Deploy 
-# 2 ways to deploy - Manual, CI/Ccd
+# 2 ways to deploy - Manual, CI/CD
 **Manual** 
 
 we will have following procedures to perform this assignment:
@@ -229,13 +229,13 @@ Once we login to the EC2, we have to install the Prerequisites:
 
 ```bash
 # Clone the repository
-git clone https://github.com/PRASADD65/tech_eazy_PRASADD65_aws_internship.git
-cd tech_eazy_PRASADD65_aws_internship
+git clone <your github repo url>
+cd <your github repo dir>
 ```
-## Variables inputs on terraform.tfvars
+## Variables inputs on dev.tfvars / prod.tfvars
 - Region (can be vary as per requirement)
 - Instance type
-- Instance ID
+- Instance ami ID
 - Key name (must available on that region on AWS console)
 - stage (prod/dev)
 - VPC (Not requried as we are using default VPC)
@@ -282,7 +282,7 @@ terraform apply
 terraform destroy
 ```
 
-**Outputs**
+## Outputs
 - Test your spring boot application:
 Open you web browser. search
 ```
@@ -307,7 +307,7 @@ Open you web browser. search
   repo.
 - GitHub Token Handling. For private repo access, read a deploy key from GitHub Actions Secrets. Ensure the key will be passed securely to EC2 or Terraform during provisioning if needed.
 - Post-Deployment Health Check. Automatically check that the application is reachable. Poll the frontend on port 80 of EC2's public IP.
-- Cloud watch to Stream application logs from EC2 to CloudWatch Logs. You will see two logs ID, ec2-syslog for all the logs of ec2, spring-app-logs for spring application's log.
+- Cloud watch to Stream application logs from EC2 to CloudWatch Logs. You will see two logs ID, ec2-syslog for all the logs of ec2, spring-app-logs for spring application's log with stage name specific. 
 - CloudWatch Alarm on error patterns or instance health.
 - SNS topic to send email notifications when the app will have ERROR / "Exception.
 - Subscribe the SNS subscription to receive the email notifications.
@@ -336,11 +336,11 @@ Open you web browser. search
 - Set the AWS credentials in the Repository secrets.
 - Set the S3 bucket name for the backend terraform.tfstate file storage in the backend.tf file. This bucket have to prebuild on the cloud before the command terraform apply execute.
 - Once you are all set with your codes, push to the github repo.
-- Upon push to the github repo, the jobs will be taken care by as following:
- - The job will be build in Github hosted runner (default runner).
- - The .github/workflow/deploy.yml file will be responsible for create the infrastructure.
- - The .github/workflow/destroy.yml file will be responsible for destory the infrastructure.
- - the infrastructures will be managed with different different workspace to maintain the infrastructure as per stage, eg. dev or prod.
- - Set the stage dev/prod on the Run workflow "Deploy in the AWS Infrastructure with Terraform workflow" to deploy the infrastructure.
- - Set the stage dev/prod in the Run workflow in the "Destroy AWS destroy infrastructure workflow" to destroy the infrastructure.
+- Upon push to the github repo with tag like deploy-dev/deploy-prod, trigger workflow. The jobs will be taken care by as following:
+   - The job will be build in Github hosted runner (default runner).
+   - The .github/workflow/deploy.yml file will be responsible for create the infrastructure.
+   - The .github/workflow/destroy.yml file will be responsible for destory the infrastructure.
+   - the infrastructures will be managed with different different workspace to maintain the infrastructure as per stage, eg. dev or prod.
+   - Set the stage dev/prod on the Run workflow "Deploy in the AWS Infrastructure with Terraform workflow" to deploy the infrastructure.
+   - Set the stage dev/prod in the Run workflow in the "Destroy AWS destroy infrastructure workflow" to destroy the infrastructure.
  
