@@ -344,5 +344,4 @@ Open you web browser. search
    - Set the stage dev/prod on the Run workflow "Deploy in the AWS Infrastructure with Terraform workflow" to deploy the infrastructure.
    - Set the stage dev/prod in the Run workflow in the "Destroy AWS destroy infrastructure workflow" to destroy the infrastructure.
 ---
-SpringApp` 4. **CloudWatch Alarms** - Icon:
  
