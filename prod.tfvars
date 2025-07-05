@@ -23,4 +23,4 @@ stop_schedule  = "cron(15 9 * * ? *)"
 repo_url       = "git@github.com:PRASADD65/SpringApp.git" << Private Repo >>
 
 # Enter the email address for sns subscription
-alert_email = "your_email_id@gmail.com"
+alert_email = "durggadora@gmail.com"
