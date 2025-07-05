@@ -135,6 +135,37 @@ resource "aws_iam_role_policy_attachment" "s3_read_only_policy_attach" {
   policy_arn = aws_iam_policy.s3_read_only_policy.arn
 }
 
+# ---------------------------------------
+# Add a CloudWatch Logs Policy Resource
+# ---------------------------------------
+resource "aws_iam_policy" "ec2_cloudwatch_logs_policy" {
+  name_prefix = "${var.stage}-ec2-cloudwatch-logs-policy"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ],
+        Resource = [
+          "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:spring-app-logs:*",
+          "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:ec2-syslog:*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_cloudwatch_logs_policy_attach" {
+  role       = aws_iam_role.ec2_s3_upload_role.name
+  policy_arn = aws_iam_policy.ec2_cloudwatch_logs_policy.arn
+}
+
+
 # -------------------------------------------------------------------
 # EventBridge Role for EC2 Start/Stop
 # -------------------------------------------------------------------
