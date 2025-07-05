@@ -14,6 +14,11 @@ variable "instance_type" {
   default     = "t3.micro"
 }
 
+variable "ami_id" {
+  description = "The EC2 instance id."
+  type        = string
+}
+
 # Added instance_name variable
 variable "instance_name" {
   description = "Name of the EC2 instance (used in tags)."
@@ -53,4 +58,9 @@ variable "start_schedule" {
 variable "stop_schedule" {
   description = "Cron expression for stopping the EC2 instance"
   default     = "cron(10 10 * * ? *)"
+}
+
+variable "alert_email" {
+  description = "Email address to receive CloudWatch alerts"
+  type        = string
 }
