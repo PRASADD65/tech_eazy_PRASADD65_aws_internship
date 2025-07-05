@@ -1,5 +1,5 @@
-resource "aws_instance" "app_server" { # Changed from "techeazy_ec2_app"
-  ami                         = "ami-07891c5a242abf4bc" # Keep your specific AMI ID. Confirm it's valid for your region.
+resource "aws_instance" "app_server" {
+  ami                         = var.ami_id # Keep your specific AMI ID. Confirm it's valid for your region.
   instance_type               = var.instance_type
   key_name                    = var.key_name
   associate_public_ip_address = true
