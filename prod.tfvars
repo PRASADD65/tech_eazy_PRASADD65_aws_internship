@@ -1,10 +1,11 @@
 # region
-region = "ap-south-2"
+region = "ap-south-1"
 
 
 # AWS EC2 Instance Configuration
-instance_type = "t3.micro"
-key_name      = "hyd" # << IMPORTANT: REPLACE WITH YOUR ACTUAL EC2 KEY PAIR NAME >>
+instance_type = "t2.micro"
+ami_id = "ami-0f918f7e67a3323f0"
+key_name      = "mub" # << IMPORTANT: REPLACE WITH YOUR ACTUAL EC2 KEY PAIR NAME >>
 stage         = "prod"      # Defines the environment/stage
 
 # S3 Bucket and Log Backup Configuration
@@ -19,4 +20,7 @@ stop_schedule  = "cron(15 9 * * ? *)"
 
 # Application Repository Configuration
 # This is the Git URL for your Spring Boot application's source code.
-repo_url       = "git@github.com:PRASADD65/SpringApp.git"
+repo_url       = "git@github.com:PRASADD65/SpringApp.git" << Private Repo >>
+
+# Enter the email address for sns subscription
+alert_email = "your_email_id@gmail.com"
