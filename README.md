@@ -1,16 +1,20 @@
-# 🚀 AWS Infrastructure Automation with Terraform
-**Assignment - 1,2,3**
+# 🚀  Deploying * Zero mile * delivery system using Terraform and GitHub Actions
 
 ## 📘 Overview
 
 This project automates the provisioning of key AWS infrastructure components using Terraform. It includes:
 
-- EC2 instance provisioning.
+- EC2 instances provisioning.
 - IAM roles for secure access control.
-- Docker containerization environment to build and host the Java Spring Boot Application.
+- Docker containerization environment to build and host the Java Spring Boot Application and Grfana and Prometheous. 
 - A private S3 bucket with lifecycle policies.
 - Log archival on instance shutdown.
 - Structured automation of self on/off on scheduled time using Event Bridge and Lambda function.
+- Parameterized Multi-Stage Deployment.
+- Private/Public GitHub Config Handling.
+- Stage-Based S3 Log Upload.
+- CloudWatch Logs of  EC2 and spring boot application with a CloudWatch Alarm for 
+- Send alerts to email via SNS (Simple Notification Service)
 - Git Hub CI/CD to automate the process of deploy and destroy the infrastructure.
 
 ---
@@ -19,7 +23,7 @@ This project automates the provisioning of key AWS infrastructure components usi
 
 - **Infrastructure as Code**: Terraform  
 - **Cloud Provider**: AWS
-- **Cloud tools**: EC2, IAM, S3, Cloudwatch Event Bridge, Lambda, Cloud watch, SNS, Grafana, Prometheus
+- **Cloud services**: EC2, IAM, S3, Cloudwatch, Event Bridge, Lambda, SNS, Grafana, Prometheus
 - **Scripts**: Bash (Shell), systemd  
 - **CLI Tools**: AWS CLI
 - **Containerizaton**: Docker
@@ -344,4 +348,35 @@ Open you web browser. search
    - Set the stage dev/prod on the Run workflow "Deploy in the AWS Infrastructure with Terraform workflow" to deploy the infrastructure.
    - Set the stage dev/prod in the Run workflow in the "Destroy AWS destroy infrastructure workflow" to destroy the infrastructure.
 ---
+# Monitoring and Observability
+---
+## CloudWatch
+- Stream application logs from EC2 to CloudWatch Logs.
+- Set up a CloudWatch Alarm on error patterns or instance health.
+- Send alerts to email via SNS (Simple Notification Service) if, 
+     - Trigger if log stream contains "ERROR" or "Exception" keyword.
+     - Trigger when condition matches for more than 1 datapoint within 5 minutes. Send notification to the SNS Topic.
+---
+## Prometheus 
+- Copy the public ip of the EC2 and search with 9090 port
+- Eg. 40.53.123.44:9090
+- Once the prometheus dashboard is open, go to Status - Target health
+- Here you will see the health status of your spring app and node port
+---
+## Grafana
+- Copy the public ip of the EC2 and search with 3000 port
+- Eg. 40.53.123.44:3000
+- 1st login into the console with default user name "admin" and default password "admin"
+- Set the new password and enter into the Grafana dashboard.
+- Integrate the Promethues with Grafana to see the health of the application and node.
+- Go to the Connections - Datasources - Add new datasource - select Promethues
+- Now on Prometheus setting set the name
+- Connection - give the Prometheus url - eg. http://18.60.101.59:9090
+- Leave rest of the configurations as default
+- Save and Test - it should show "Successfully queried the Prometheus API."
+- Now go to Grafana Home - Dashboard - New - Import
+- In the Import dashboard setting give the chart no 1860 or as per your requirement - Load
+- On prometheus select your prometheus (That we have save in the integration part)
+- Load - Import
+- Now you will have your Grafana dashboard is ready for the observability of your application with the graphical UI of node and application health.
  
