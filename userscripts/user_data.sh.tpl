@@ -21,14 +21,17 @@ ${verifyrole1a_sh_content}
 EOF
 chmod +x /tmp/verifyrole1a.sh
 
-# ---- Export Environment Variables ----
-export REPO_URL="${REPO_URL}"
-export S3_BUCKET_NAME="${S3_BUCKET_NAME}"
-export STAGE="${STAGE}"
-export AWS_REGION="${AWS_REGION}"
-export AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID}"
+# ---- Export Environment Variables (with Fallbacks!) ----
+# Fallback to dummy values if not present to avoid empty config
+export REPO_URL="${REPO_URL:-https://github.com/example/example.git}"
+export S3_BUCKET_NAME="${S3_BUCKET_NAME:-dummy-bucket}"
+export STAGE="${STAGE:-dev}"
+export AWS_REGION="${AWS_REGION:-us-east-1}"
+export AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-000000000000}"
 export INSTANCE_ID=$(ec2-metadata --instance-id | cut -d ' ' -f 2)
 export LOG_DIR_HOST="/root/springlog"
+
+echo "DEBUG: STAGE=$STAGE S3_BUCKET_NAME=$S3_BUCKET_NAME REPO_URL=$REPO_URL"
 
 # ---- Install Dependencies ----
 apt-get update -y
@@ -58,7 +61,7 @@ chmod 600 /root/.ssh/id_rsa
 ssh-keyscan github.com >> /root/.ssh/known_hosts
 chmod 644 /root/.ssh/known_hosts
 
-# ---- Clone the Git Repository ----
+# ---- Clone the Git Repository (with fallback name) ----
 REPO_NAME=$(basename "${REPO_URL}" .git)
 git clone "${REPO_URL}" /root/"${REPO_NAME}"
 
@@ -75,7 +78,7 @@ chmod 755 /root/springlog
 cd "/root/${REPO_NAME}"
 docker build -t spring .
 
-docker network create monitoring-net
+docker network create monitoring-net || true # Don't fail if already exists
 
 docker run -itd --name spring-app \
   --network monitoring-net \
@@ -86,18 +89,14 @@ docker run -itd --name spring-app \
 
 # ---- Install CloudWatch Agent ----
 mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
-# Download to /tmp and use sudo dpkg for robust installation
 curl "https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb" -o "/tmp/amazon-cloudwatch-agent.deb"
 sudo dpkg -i -E /tmp/amazon-cloudwatch-agent.deb
-rm /tmp/amazon-cloudwatch-agent.deb # Clean up downloaded deb file
-sudo systemctl daemon-reload # Reload systemd to pick up new service files
+rm /tmp/amazon-cloudwatch-agent.deb
+sudo systemctl daemon-reload
 
-# ---- Create CloudWatch Agent Config ----
-# Remove any existing config file to prevent conflicts
+# ---- Create CloudWatch Agent Config (NO INLINE COMMENTS! Valid JSON only) ----
 sudo rm -f /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 
-# IMPORTANT: Updated log_group_name to use the STAGE variable
-# Use sudo tee to ensure the file is written with root permissions
 cat <<EOF | sudo tee /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json > /dev/null
 {
   "logs": {
@@ -106,12 +105,12 @@ cat <<EOF | sudo tee /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agen
         "collect_list": [
           {
             "file_path": "/root/springlog/application.log",
-            "log_group_name": "${STAGE}-spring-app-logs", # Dynamically set log group name
+            "log_group_name": "${STAGE}-spring-app-logs",
             "log_stream_name": "spring-app-instance"
           },
           {
             "file_path": "/var/log/syslog",
-            "log_group_name": "${STAGE}-ec2-syslog", # Dynamically set log group name
+            "log_group_name": "${STAGE}-ec2-syslog",
             "log_stream_name": "syslog-instance"
           }
         ]
@@ -120,24 +119,17 @@ cat <<EOF | sudo tee /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agen
   }
 }
 EOF
-# Ensure the config file has correct permissions for the agent to read
 sudo chmod 644 /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 
-# --- DEBUGGING STEP: Verify file creation and permissions ---
 echo "--- DEBUG: Checking CloudWatch Agent config file ---"
 ls -l /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+cat /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 echo "--- END DEBUG ---"
-# --- END DEBUGGING STEP ---
 
-# Apply the configuration to the agent and start it.
-# The '-s' flag here means 'start the agent' and should keep it running.
-# This command is typically what the systemd service's ExecStart calls.
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
 
-# Ensure the systemd service is enabled to start on boot
 sudo systemctl enable amazon-cloudwatch-agent
-# Explicitly restart the service for robustness after config is applied and fetched
 sudo systemctl restart amazon-cloudwatch-agent
 
 # ---- Create Environment File for systemd ----
