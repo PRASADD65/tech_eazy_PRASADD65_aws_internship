@@ -21,13 +21,13 @@ ${verifyrole1a_sh_content}
 EOF
 chmod +x /tmp/verifyrole1a.sh
 
-# ---- Export Environment Variables (with Fallbacks!) ----
-# Fallback to dummy values if not present to avoid empty config
-export REPO_URL="${REPO_URL:-https://github.com/example/example.git}"
-export S3_BUCKET_NAME="${S3_BUCKET_NAME:-dummy-bucket}"
-export STAGE="${STAGE:-dev}"
-export AWS_REGION="${AWS_REGION:-us-east-1}"
-export AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-000000000000}"
+# ---- Export Environment Variables (with Fallbacks) ----
+export REPO_URL="${REPO_URL}"
+export S3_BUCKET_NAME="${S3_BUCKET_NAME}"
+export STAGE="${STAGE}"
+export AWS_REGION="${AWS_REGION}"
+export AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID}"
+export REPO_NAME="${REPO_NAME}"
 export INSTANCE_ID=$(ec2-metadata --instance-id | cut -d ' ' -f 2)
 export LOG_DIR_HOST="/root/springlog"
 
@@ -61,8 +61,7 @@ chmod 600 /root/.ssh/id_rsa
 ssh-keyscan github.com >> /root/.ssh/known_hosts
 chmod 644 /root/.ssh/known_hosts
 
-# ---- Clone the Git Repository (with fallback name) ----
-REPO_NAME=$(basename "${REPO_URL}" .git)
+# ---- Clone the Git Repository ----
 git clone "${REPO_URL}" /root/"${REPO_NAME}"
 
 # ---- Remove the private key after use for security ----
@@ -78,7 +77,7 @@ chmod 755 /root/springlog
 cd "/root/${REPO_NAME}"
 docker build -t spring .
 
-docker network create monitoring-net || true # Don't fail if already exists
+docker network create monitoring-net || true
 
 docker run -itd --name spring-app \
   --network monitoring-net \
@@ -94,7 +93,7 @@ sudo dpkg -i -E /tmp/amazon-cloudwatch-agent.deb
 rm /tmp/amazon-cloudwatch-agent.deb
 sudo systemctl daemon-reload
 
-# ---- Create CloudWatch Agent Config (NO INLINE COMMENTS! Valid JSON only) ----
+# ---- Create CloudWatch Agent Config ----
 sudo rm -f /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 
 cat <<EOF | sudo tee /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json > /dev/null
