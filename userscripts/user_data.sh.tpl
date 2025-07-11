@@ -90,6 +90,7 @@ curl -O https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amaz
 dpkg -i -E ./amazon-cloudwatch-agent.deb
 
 # ---- Create CloudWatch Agent Config ----
+# IMPORTANT: Updated log_group_name to use the STAGE variable
 cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 {
   "logs": {
@@ -98,12 +99,12 @@ cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
         "collect_list": [
           {
             "file_path": "/root/springlog/application.log",
-            "log_group_name": "spring-app-logs",
+            "log_group_name": "${STAGE}-spring-app-logs", # Dynamically set log group name
             "log_stream_name": "spring-app-instance"
           },
           {
             "file_path": "/var/log/syslog",
-            "log_group_name": "ec2-syslog",
+            "log_group_name": "${STAGE}-ec2-syslog", # Dynamically set log group name
             "log_stream_name": "syslog-instance"
           }
         ]
