@@ -29,12 +29,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Lambda Deployment Packages
-        run: chmod +x build_lambda_zips.sh && ./build_lambda_zips.sh
+        # The build_lambda_zips.sh script is now in the userscripts directory
+        run: chmod +x userscripts/build_lambda_zips.sh && ./userscripts/build_lambda_zips.sh
+        # The working directory should remain the root of the repo for this command
         working-directory: ./
         continue-on-error: true
 
       - name: Verify Lambda Zips After Build (Optional)
-        run: ls -l *.zip || true
+        # Zips are now created in the Terraform directory
+        run: ls -l Terraform/*.zip || true
         working-directory: ./
 
       - name: Setup Terraform CLI
@@ -51,6 +54,7 @@ jobs:
 
       - name: Determine Deployment Stage and Select/Create Terraform Workspace
         id: set_stage_and_workspace
+        # This step now needs to operate from within the Terraform directory
         run: |
           STAGE="${{ github.event.inputs.stage }}"
           echo "STAGE=$STAGE" >> $GITHUB_ENV
@@ -65,20 +69,22 @@ jobs:
           else
             terraform workspace new "$STAGE"
           fi
-        working-directory: ./
+        # All subsequent terraform commands will be run from the Terraform directory
+        working-directory: ./Terraform
 
       - name: Terraform Validate
         run: terraform validate
-        working-directory: ./
+        working-directory: ./Terraform # Ensure this is explicitly set for clarity
 
       - name: Terraform Plan Destroy
         env:
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        run: terraform plan -destroy -out=tfplan -var-file=${{ env.STAGE }}.tfvars -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}"
-        working-directory: ./
+        # Reference TFVARS_FILE which is now a relative path from Terraform directory
+        run: terraform plan -destroy -out=tfplan -var-file=../configs/${{ env.STAGE }}.tfvars -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}"
+        working-directory: ./Terraform # Ensure this is explicitly set for clarity
 
       - name: Terraform Apply Destroy
         env:
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         run: terraform apply -auto-approve tfplan
-        working-directory: ./
+        working-directory: ./Terraform # Ensure this is explicitly set for clarity
