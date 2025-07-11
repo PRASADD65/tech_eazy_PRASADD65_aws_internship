@@ -34,7 +34,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Lambda Deployment Packages
-        run: chmod +x build_lambda_zips.sh && ./build_lambda_zips.sh
+        # The build_lambda_zips.sh script is now in the userscripts directory
+        run: chmod +x userscripts/build_lambda_zips.sh && ./userscripts/build_lambda_zips.sh
+        # The working directory should remain the root of the repo for this command
         working-directory: ./
 
       - name: Setup Terraform CLI
@@ -51,6 +53,7 @@ jobs:
 
       - name: Determine Deployment Stage and Select/Create Terraform Workspace
         id: set_stage_and_workspace
+        # This step now needs to operate from within the Terraform directory
         run: |
           if [[ "${{ github.event_name }}" == "push" ]]; then
             TAG_NAME="${{ github.ref_name }}"
@@ -75,34 +78,41 @@ jobs:
           else
             terraform workspace new "$STAGE"
           fi
-        working-directory: ./
+        # All subsequent terraform commands will be run from the Terraform directory
+        working-directory: ./Terraform
 
       - name: Select tfvars file for stage
+        # This step now needs to reference the tfvars files in the configs directory
         run: |
           if [[ "$STAGE" == "dev" ]]; then
-            TFVARS_FILE="dev.tfvars"
+            # Path relative to the working-directory (./Terraform)
+            TFVARS_FILE="../configs/dev.tfvars"
           elif [[ "$STAGE" == "prod" ]]; then
-            TFVARS_FILE="prod.tfvars"
+            # Path relative to the working-directory (./Terraform)
+            TFVARS_FILE="../configs/prod.tfvars"
           else
             echo "Unknown stage $STAGE"; exit 1
           fi
           echo "TFVARS_FILE=$TFVARS_FILE" >> $GITHUB_ENV
+        # This step's working directory is still ./Terraform from the previous step
+        working-directory: ./Terraform
 
       - name: Terraform Validate
         run: terraform validate
-        working-directory: ./
+        working-directory: ./Terraform # Ensure this is explicitly set for clarity
 
       - name: Terraform Plan
         env:
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        # Reference TFVARS_FILE which is now a relative path from Terraform directory
         run: terraform plan -var-file=${{ env.TFVARS_FILE }} -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan
-        working-directory: ./
+        working-directory: ./Terraform # Ensure this is explicitly set for clarity
 
       - name: Terraform Apply
         env:
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         run: terraform apply -auto-approve tfplan
-        working-directory: ./ 
+        working-directory: ./Terraform # Ensure this is explicitly set for clarity
 
       - name: Get EC2 Public IP/DNS
         run: |
@@ -111,7 +121,7 @@ jobs:
             echo "ERROR: No public IP found."; exit 1;
           fi
           echo "EC2_PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
-        working-directory: ./
+        working-directory: ./Terraform # Ensure this is explicitly set for clarity
 
       - name: Validate Application Health Post-Deployment
         if: success() && env.EC2_PUBLIC_IP != ''
@@ -120,8 +130,8 @@ jobs:
             for i in {1..40}; do
               STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ env.EC2_PUBLIC_IP }}/actuator/health")
               if [ "$STATUS" -eq 200 ]; then
-                 echo "App is healthy (HTTP 200)."; exit 0;
+                  echo "App is healthy (HTTP 200)."; exit 0;
               fi
-                 echo "Retry $i: Not ready (HTTP $STATUS). Waiting..."; sleep 30;
+              echo "Retry $i: Not ready (HTTP $STATUS). Waiting..."; sleep 30;
             done
             echo "App did not become healthy."; exit 1;
