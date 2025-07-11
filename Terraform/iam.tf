@@ -152,8 +152,8 @@ resource "aws_iam_policy" "ec2_cloudwatch_logs_policy" {
           "logs:DescribeLogStreams"
         ],
         Resource = [
-          "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:spring-app-logs:*",
-          "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:ec2-syslog:*"
+          "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:${var.stage}-spring-app-logs:*", # UPDATED
+          "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:${var.stage}-ec2-syslog:*" # UPDATED
         ]
       }
     ]
