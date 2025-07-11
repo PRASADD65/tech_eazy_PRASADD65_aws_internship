@@ -9,22 +9,22 @@ resource "aws_instance" "app_server" {
   # Attach the IAM Instance Profile to this EC2 instance
   iam_instance_profile = aws_iam_instance_profile.app_instance_profile.name
 
-  user_data = templatefile("${path.module}/user_data.sh.tpl", {
-  REPO_URL                     = var.repo_url,
-  S3_BUCKET_NAME               = var.s3_bucket_name,
-  STAGE                        = var.stage,
-  AWS_REGION                   = var.region,
-  AWS_ACCOUNT_ID               = data.aws_caller_identity.current.account_id,
-  REPO_NAME                    = trimsuffix(basename(var.repo_url), ".git"),
-  EC2_SSH_PRIVATE_KEY = replace(var.ec2_ssh_private_key, "\\n", "\n"),
-  upload_on_shutdown_service_content = templatefile("${path.module}/upload-on-shutdown.service", {
-    S3_BUCKET_NAME = var.s3_bucket_name,
-    STAGE          = var.stage           # <-- fixed here
-  }),
-  upload_on_shutdown_sh_content = file("${path.module}/upload_on_shutdown.sh"),
-  verifyrole1a_sh_content       = file("${path.module}/verifyrole1a.sh"),
+  user_data = templatefile("${path.module}/../userscripts/user_data.sh.tpl", {
+    REPO_URL                     = var.repo_url,
+    S3_BUCKET_NAME               = var.s3_bucket_name,
+    STAGE                        = var.stage,
+    AWS_REGION                   = var.region,
+    AWS_ACCOUNT_ID               = data.aws_caller_identity.current.account_id,
+    REPO_NAME                    = trimsuffix(basename(var.repo_url), ".git"),
+    EC2_SSH_PRIVATE_KEY = replace(var.ec2_ssh_private_key, "\\n", "\n"),
+    upload_on_shutdown_service_content = templatefile("${path.module}/../userscripts/upload-on-shutdown.service", {
+      S3_BUCKET_NAME = var.s3_bucket_name,
+      STAGE          = var.stage
+    }),
+    upload_on_shutdown_sh_content = file("${path.module}/../userscripts/upload_on_shutdown.sh"),
+    verifyrole1a_sh_content       = file("${path.module}/../userscripts/verifyrole1a.sh"),
   })
-  
+
   # The explicit self-dependency is NOT needed here anymore for private_ip as it's fetched in user_data.
   # However, keeping other depends_on as per your original file.
   depends_on = [
