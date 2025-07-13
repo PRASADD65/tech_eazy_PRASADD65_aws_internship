@@ -24,7 +24,7 @@ env:
 
 jobs:
   deploy_or_update:
-    runs-on: [self-hosted, ubuntu, ec2]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     timeout-minutes: 30
