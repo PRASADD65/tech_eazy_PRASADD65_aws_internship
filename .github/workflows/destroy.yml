@@ -19,7 +19,7 @@ env:
 
 jobs:
   destroy_infrastructure:
-    runs-on: [self-hosted, ubuntu, ec2]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     timeout-minutes: 30
