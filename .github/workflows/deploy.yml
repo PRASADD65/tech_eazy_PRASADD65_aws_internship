@@ -114,6 +114,12 @@ jobs:
         run: terraform apply -auto-approve tfplan
         working-directory: ./Terraform # Ensure this is explicitly set for clarity
       
+      - name: Setup SSH Key
+        run: |
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" > key.pem
+          chmod 600 key.pem
+
+      
       - name: Capture Deploy Log for Monitoring
         run: |
           LOG_DIR="/home/ubuntu/runnerlog/${STAGE}"
