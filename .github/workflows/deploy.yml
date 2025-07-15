@@ -108,11 +108,12 @@ jobs:
         run: terraform plan -var-file=${{ env.TFVARS_FILE }} -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan
         working-directory: ./Terraform # Ensure this is explicitly set for clarity
 
-      - name: Terraform Apply
+      - name: Terraform Apply & Capture Output
         env:
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        run: terraform apply -auto-approve tfplan
-        working-directory: ./Terraform # Ensure this is explicitly set for clarity
+        run: terraform apply -auto-approve tfplan | tee tfplan_output.log
+        working-directory: ./Terraform
+
       
       - name: Get EC2 Public IP/DNS
         run: |
@@ -128,12 +129,13 @@ jobs:
           echo "${{ secrets.EC2_PRIVATE_KEY }}" > key.pem
           chmod 600 key.pem
       
-      - name: Capture Deploy Log for Monitoring
+      - name: Save Terraform Apply Output to EC2 Log Directory
         run: |
           LOG_DIR="/home/ubuntu/runnerlog/${STAGE}"
           LOG_FILE="${LOG_DIR}/${STAGE}_$(date +%s).log"
           echo "=== Terraform Apply Log (${STAGE}) ===" > "$LOG_FILE"
-          terraform apply -auto-approve tfplan >> "$LOG_FILE" 2>&1
+          cat ./Terraform/tfplan_output.log >> "$LOG_FILE"
+
         continue-on-error: true 
        
       
