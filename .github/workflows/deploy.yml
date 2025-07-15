@@ -113,7 +113,14 @@ jobs:
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         run: terraform apply -auto-approve tfplan
         working-directory: ./Terraform # Ensure this is explicitly set for clarity
-
+      
+      - name: Capture Deploy Log for Monitoring
+        run: |
+          LOG_DIR="/home/ubuntu/runnerlog/${STAGE}"
+          LOG_FILE="${LOG_DIR}/${STAGE}_$(date +%s).log"
+          echo "=== Terraform Apply Log (${STAGE}) ===" > "$LOG_FILE"
+          terraform apply -auto-approve tfplan >> "$LOG_FILE" 2>&1
+      
       - name: Get EC2 Public IP/DNS
         run: |
           PUBLIC_IP=$(terraform output -raw instance_public_ip)
