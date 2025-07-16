@@ -135,16 +135,7 @@ jobs:
           LOG_FILE="${LOG_DIR}/${STAGE}_$(date +%s).log"
           echo "=== Terraform Apply Log (${STAGE}) ===" > "$LOG_FILE"
           cat ./Terraform/tfplan_output.log >> "$LOG_FILE"
-
         continue-on-error: true 
-       
-      
-      - name: Trigger Log Parser Over SSH
-        run: |
-         echo "${{ secrets.EC2_PRIVATE_KEY }}" > key.pem
-         chmod 600 key.pem
-         ssh -i key.pem -o StrictHostKeyChecking=no ubuntu@${{ env.EC2_PUBLIC_IP }} \
-          'sudo /usr/bin/python3 /root/log_parser.py'
 
       - name: Validate Application Health Post-Deployment
         if: success() && env.EC2_PUBLIC_IP != ''
