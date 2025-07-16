@@ -356,6 +356,10 @@ Open you web browser. search
 - Send alerts to email via SNS (Simple Notification Service) if, 
      - Trigger if log stream contains "ERROR" or "Exception" keyword.
      - Trigger when condition matches for more than 1 datapoint within 5 minutes. Send notification to the SNS Topic.
+- To test manually, log in to the ec2 - bash:
+  ```
+  echo "ERROR: Test error $(date)" | sudo tee -a /root/springlog/application.log
+  ```
 ---
 ## Prometheus 
 - Copy the public ip of the EC2 and search with 9090 port
