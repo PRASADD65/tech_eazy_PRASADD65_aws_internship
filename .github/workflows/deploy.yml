@@ -117,9 +117,11 @@ jobs:
 
       - name: Simulate Failure for Alert Testing
         run: |
-          export STEP_NAME="Simulate Failure for Alert Testing"
-          echo "Simulating failure to test alert notifications..."
-          exit 1
+         export STEP_NAME="Simulate Failure for Alert Testing"
+         source userscripts/notify_sns_failure.sh
+         echo "Simulating failure to test alert notifications..."
+         exit 1
+
 
       - name: Terraform Apply & Capture Output
         env:
