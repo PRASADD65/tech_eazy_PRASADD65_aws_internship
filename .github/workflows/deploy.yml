@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       stage:
-        description: 'Select Deployment Stage (dev or prod)'
+        description: 'Stage'
         required: true
         type: choice
         options:
