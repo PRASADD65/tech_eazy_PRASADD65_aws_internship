@@ -28,25 +28,13 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 30
+    env:
+      STAGE: ${{ github.event.inputs.stage || 'dev' }}
+      LOG_FILE: /home/ubuntu/runnerlog/${{ github.event.inputs.stage || 'dev' }}/${{ github.run_id }}.log
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Determine Deployment Stage and Set Log Path
-        run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            TAG_NAME="${{ github.ref_name }}"
-            if [[ "$TAG_NAME" == "deploy-dev" ]]; then STAGE="dev"
-            elif [[ "$TAG_NAME" == "deploy-prod" ]]; then STAGE="prod"
-            else
-              echo "Unsupported tag name. Exiting."; exit 1;
-            fi
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            STAGE="${{ github.event.inputs.stage }}"
-          fi
-          echo "STAGE=$STAGE" >> $GITHUB_ENV
-          echo "LOG_FILE=/home/ubuntu/runnerlog/${STAGE}/${STAGE}_${{ github.run_id }}.log" >> $GITHUB_ENV
 
       - name: Build Lambda Deployment Packages
         run: chmod +x userscripts/build_lambda_zips.sh && ./userscripts/build_lambda_zips.sh | tee -a "$LOG_FILE"
@@ -69,7 +57,7 @@ jobs:
           terraform init \
             -backend-config="bucket=${{ env.S3_BACKEND_BUCKET_NAME }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="key=terraform/${STAGE}/terraform.tfstate"
+            -backend-config="key=terraform/${{ env.STAGE }}/terraform.tfstate"
 
           if terraform workspace list | grep -q " ${STAGE}$"; then
             terraform workspace select "$STAGE"
