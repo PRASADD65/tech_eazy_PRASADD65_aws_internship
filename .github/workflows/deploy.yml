@@ -121,6 +121,8 @@ jobs:
          source userscripts/notify_sns_failure.sh
          echo "Simulating failure to test alert notifications..."
          exit 1
+        shell: bash
+
 
 
       - name: Terraform Apply & Capture Output
