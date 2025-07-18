@@ -118,7 +118,7 @@ jobs:
       - name: Simulate Failure for Alert Testing
         run: |
          export STEP_NAME="Simulate Failure for Alert Testing"
-         source userscripts/notify_sns_failure.sh
+         source tech_eazy_PRASADD65_aws_internship/userscripts/notify_sns_failure.sh
          echo "Simulating failure to test alert notifications..."
          exit 1
         shell: bash
