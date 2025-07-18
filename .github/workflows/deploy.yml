@@ -38,6 +38,7 @@ jobs:
       - name: Source Failure Trap Script
         run: |
           export STEP_NAME="Source Failure Trap Script"
+          chmod +x userscripts/notify_sns_failure.sh
           source userscripts/notify_sns_failure.sh
 
       - name: Build Lambda Deployment Packages
