@@ -6,7 +6,7 @@ on:
       - 'deploy-dev'
       - 'deploy-prod'
 
-workflow_dispatch:
+  workflow_dispatch:
     inputs:
       stage:
         description: 'Select Deployment Stage (dev or prod)'
