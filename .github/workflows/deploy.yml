@@ -215,7 +215,7 @@ jobs:
           # Validate Application Health Post-Deployment
           # ----------------------------------------------
           # The if condition needs to be a shell 'if' now, as it's inside a single 'run' block.
-          if [[ "${{ success() }}" == "true" && -n "$EC2_PUBLIC_IP" ]]; then
+          if [[ -n "$EC2_PUBLIC_IP" ]]; then
             export STEP_NAME="Validate Application Health Post-Deployment"
             echo "## Step: ${STEP_NAME}"
             echo "Checking health at http://${EC2_PUBLIC_IP}/actuator/health..."
