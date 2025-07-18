@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 # Load SNS topic ARN from the file created during userdata bootstrap
 SNS_TOPIC_ARN=$(cat /home/ubuntu/snstopic/sns_topic_arn.txt)
@@ -22,4 +21,3 @@ notify_failure() {
   exit $exit_code
 }
 
-trap notify_failure ERR
