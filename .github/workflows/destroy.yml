@@ -89,10 +89,4 @@ jobs:
         run: terraform apply -auto-approve tfplan
         working-directory: ./Terraform # Ensure this is explicitly set for clarity
        
-      - name: Capture Destroy Log for Monitoring
-        run: |
-           LOG_DIR="/home/ubuntu/runnerlog/${STAGE}"
-           LOG_FILE="${LOG_DIR}/${STAGE}_destroy_$(date +%s).log"
-           echo "=== Terraform Destroy Log (${STAGE}) ===" > "$LOG_FILE"
-           terraform apply -auto-approve tfplan >> "$LOG_FILE" 2>&1
 
