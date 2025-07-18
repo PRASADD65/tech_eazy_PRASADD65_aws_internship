@@ -115,21 +115,13 @@ jobs:
           terraform plan -var-file=${{ env.TFVARS_FILE }} -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan
         working-directory: ./Terraform
 
-      - name: Simulate Failure for Alert Testing
+      - name: Source Failure Trap Script
         run: |
-           export STEP_NAME="Simulate Failure for Alert Testing"
-           source /home/ubuntu/github-runner/_work/tech_eazy_PRASADD65_aws_internship/tech_eazy_PRASADD65_aws_internship/userscripts/notify_sns_failure.sh
-
-           echo "Simulating failure to test alert notifications..."
-
-           # Simulate failure
-           false
-           # If failure occurs, call notify_failure
-           || notify_failure
-           shell: bash
-
-
-
+          chmod +x userscripts/notify_sns_failure.sh
+          # Source the script to enable the trap for subsequent commands in this job
+          source userscripts/notify_sns_failure.sh
+          # Set -e for the entire shell if you want immediate exit on error
+          set -e 
 
       - name: Terraform Apply & Capture Output
         env:
