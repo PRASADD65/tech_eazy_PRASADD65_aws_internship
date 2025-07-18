@@ -90,15 +90,15 @@ jobs:
           echo "Deployment Stage: $STAGE"
 
           # Terraform init, workspace selection/creation
-          terraform -chdir ./Terraform init \
+          terraform -chdir=./Terraform init \
             -backend-config="bucket=${{ env.S3_BACKEND_BUCKET_NAME }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="key=terraform/${STAGE}/terraform.tfstate"
 
-          if terraform -chdir ./Terraform workspace list | grep -q " ${STAGE}$"; then
-            terraform -chdir ./Terraform workspace select "$STAGE"
+          if terraform -chdir=./Terraform workspace list | grep -q " ${STAGE}$"; then
+            terraform -chdir=./Terraform workspace select "$STAGE"
           else
-            terraform -chdir ./Terraform workspace new "$STAGE"
+            terraform -chdir=./Terraform workspace new "$STAGE"
           fi
           echo "## ${STEP_NAME} Complete"
           echo ""
@@ -127,7 +127,7 @@ jobs:
           # ----------------------------------------------
           export STEP_NAME="Terraform Validate"
           echo "## Step: ${STEP_NAME}"
-          terraform -chdir ./Terraform validate
+          terraform -chdir=./Terraform validate
           echo "## ${STEP_NAME} Complete"
           echo ""
 
@@ -136,7 +136,7 @@ jobs:
           # ----------------------------------------------
           export STEP_NAME="Terraform Plan"
           echo "## Step: ${STEP_NAME}"
-          terraform -chdir ./Terraform plan -var-file="${TFVARS_FILE}" -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan
+          terraform -chdir=./Terraform plan -var-file="${TFVARS_FILE}" -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan
           echo "## ${STEP_NAME} Complete"
           echo ""
 
@@ -156,7 +156,7 @@ jobs:
           # ----------------------------------------------
           export STEP_NAME="Terraform Apply & Capture Output"
           echo "## Step: ${STEP_NAME}"
-          terraform -chdir ./Terraform apply -auto-approve tfplan | tee ./Terraform/tfplan_output.log
+          terraform -chdir=./Terraform apply -auto-approve tfplan | tee ./Terraform/tfplan_output.log
           echo "## ${STEP_NAME} Complete"
           echo ""
 
@@ -165,7 +165,7 @@ jobs:
           # ----------------------------------------------
           export STEP_NAME="Get EC2 Public IP/DNS"
           echo "## Step: ${STEP_NAME}"
-          PUBLIC_IP=$(terraform -chdir ./Terraform output -raw instance_public_ip)
+          PUBLIC_IP=$(terraform -chdir=./Terraform output -raw instance_public_ip)
           if [ -z "$PUBLIC_IP" ]; then
             echo "ERROR: No public IP found."; exit 1; # This will trigger the trap
           fi
