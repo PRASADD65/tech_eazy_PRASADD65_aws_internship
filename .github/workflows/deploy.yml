@@ -124,7 +124,6 @@ jobs:
         shell: bash
 
 
-
       - name: Terraform Apply & Capture Output
         env:
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
