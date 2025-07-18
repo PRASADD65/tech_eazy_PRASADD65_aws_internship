@@ -34,35 +34,38 @@ This project automates the provisioning of key AWS infrastructure components usi
 
 ```
 tech_eazy_PRASADD65_aws_internship/
+├── .github
+│   └── workflows
+│       ├── deploy.yml
+│       └── destroy.yml
+├── userscripts
+│   ├── upload-on-shutdown.service
+│   ├── upload_on_shutdown.sh
+│   ├── user_data.sh.tpl
+│   ├── verifyrole1a.sh
+│   └── build_lambda_zips.sh
+├── configs/
+│   ├── prod.tfvars
+│   └── dev.tfvars
+├── Terraform/
+│   ├── CloudWatchAlarm.tf
+│   ├── cloudwatcheventrule.tf
+│   ├── backend.tf
+│   ├── ec2.tf
+│   ├── iam.tf
+│   ├── lambdafunction.tf
+│   ├── lambdapermission.tf
+│   ├── output.tf
+│   ├── s3.tf
+│   ├── stop_instance.py
+│   ├── start_instance.py
+│   ├── sns.tf
+│   ├── terraform.tf
+│   ├── variable.tf
+│   ├── start_instance.zip 
+│   └── stop_instance.zip   
+└── README.md
 
-   ├── .github
-   |     ├── workflows
-   |          └── deploy.yml
-   |          └── destroy.yml
-   ├── build_lambda_zips.sh
-   ├── CloudWatchAlarm.tf
-   ├── cloudwatcheventrule.tf
-   ├── backend.tf
-   ├── ec2.tf
-   ├── iam.tf
-   ├── dev.tfvars
-   ├── lambdafunction.tf
-   ├── lambdapermission.tf
-   ├── output.tf
-   ├── s3.tf
-   ├── start_instance.py
-   ├── start_instance.zip
-   ├── stop_instance.py
-   ├── stop_instance.zip
-   ├── sns.tf
-   ├── terraform.tf
-   ├── prod.tfvars
-   ├── upload-on-shutdown.service
-   ├── upload_on_shutdown.sh
-   ├── user_data.sh.tpl
-   ├── variable.tf
-   └── verifyrole1a.sh
-   └── configs/
 ```
 
 ---
