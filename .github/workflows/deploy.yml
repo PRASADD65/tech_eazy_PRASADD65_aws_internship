@@ -117,11 +117,14 @@ jobs:
 
       - name: Simulate Failure for Alert Testing
         run: |
-         export STEP_NAME="Simulate Failure for Alert Testing"
-         source /home/ubuntu/github-runner/_work/tech_eazy_PRASADD65_aws_internship/tech_eazy_PRASADD65_aws_internship/userscripts/notify_sns_failure.sh
-         echo "Simulating failure to test alert notifications..."
-         exit 1
+         {
+           export STEP_NAME="Simulate Failure for Alert Testing"
+           source userscripts/notify_sns_failure.sh
+           echo "Simulating failure to test alert notifications..."
+           exit 1
+         } || echo "Failure simulated, continuing workflow..."
         shell: bash
+
 
 
       - name: Terraform Apply & Capture Output
