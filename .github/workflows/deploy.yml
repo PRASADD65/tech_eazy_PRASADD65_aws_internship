@@ -31,128 +31,145 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      steps:
+  - name: Source Failure Trap Script
+    run: source ./scripts/notify_sns_failure.sh
 
-      - name: Build Lambda Deployment Packages
-        # The build_lambda_zips.sh script is now in the userscripts directory
-        run: chmod +x userscripts/build_lambda_zips.sh && ./userscripts/build_lambda_zips.sh
-        # The working directory should remain the root of the repo for this command
-        working-directory: ./
+  - name: Checkout Repository
+    run: |
+      export STEP_NAME="Checkout Repository"
+      git clone ${{ github.repository }} .
 
-      - name: Setup Terraform CLI
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
+  - name: Build Lambda Deployment Packages
+    run: |
+      export STEP_NAME="Build Lambda Deployment Packages"
+      chmod +x userscripts/build_lambda_zips.sh
+      ./userscripts/build_lambda_zips.sh
+    working-directory: ./
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+  - name: Setup Terraform CLI
+    run: |
+      export STEP_NAME="Setup Terraform CLI"
+      # Setup Terraform is using an action; no custom commands here
+    uses: hashicorp/setup-terraform@v3
+    with:
+      terraform_version: ${{ env.TERRAFORM_VERSION }}
 
-      - name: Determine Deployment Stage and Select/Create Terraform Workspace
-        id: set_stage_and_workspace
-        # This step now needs to operate from within the Terraform directory
-        run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            TAG_NAME="${{ github.ref_name }}"
-            if [[ "$TAG_NAME" == "deploy-dev" ]]; then STAGE="dev"
-            elif [[ "$TAG_NAME" == "deploy-prod" ]]; then STAGE="prod"
-            else
-              echo "Unsupported tag name. Exiting."; exit 1;
-            fi
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            STAGE="${{ github.event.inputs.stage }}"
-          fi
+  - name: Configure AWS Credentials
+    run: |
+      export STEP_NAME="Configure AWS Credentials"
+      echo "AWS credentials configured by GitHub Action"
+    uses: aws-actions/configure-aws-credentials@v4
+    with:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      aws-region: ${{ env.AWS_REGION }}
 
-          echo "STAGE=$STAGE" >> $GITHUB_ENV
+  - name: Determine Deployment Stage and Select/Create Terraform Workspace
+    id: set_stage_and_workspace
+    run: |
+      export STEP_NAME="Determine Deployment Stage and Select/Create Terraform Workspace"
+      if [[ "${{ github.event_name }}" == "push" ]]; then
+        TAG_NAME="${{ github.ref_name }}"
+        if [[ "$TAG_NAME" == "deploy-dev" ]]; then STAGE="dev"
+        elif [[ "$TAG_NAME" == "deploy-prod" ]]; then STAGE="prod"
+        else
+          echo "Unsupported tag name. Exiting."; exit 1;
+        fi
+      elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+        STAGE="${{ github.event.inputs.stage }}"
+      fi
 
-          terraform init \
-            -backend-config="bucket=${{ env.S3_BACKEND_BUCKET_NAME }}" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="key=terraform/${STAGE}/terraform.tfstate"
+      echo "STAGE=$STAGE" >> $GITHUB_ENV
 
-          if terraform workspace list | grep -q " ${STAGE}$"; then
-            terraform workspace select "$STAGE"
-          else
-            terraform workspace new "$STAGE"
-          fi
-        # All subsequent terraform commands will be run from the Terraform directory
-        working-directory: ./Terraform
+      terraform init \
+        -backend-config="bucket=${{ env.S3_BACKEND_BUCKET_NAME }}" \
+        -backend-config="region=${{ env.AWS_REGION }}" \
+        -backend-config="key=terraform/${STAGE}/terraform.tfstate"
 
-      - name: Select tfvars file for stage
-        # This step now needs to reference the tfvars files in the configs directory
-        run: |
-          if [[ "$STAGE" == "dev" ]]; then
-            # Path relative to the working-directory (./Terraform)
-            TFVARS_FILE="../configs/dev.tfvars"
-          elif [[ "$STAGE" == "prod" ]]; then
-            # Path relative to the working-directory (./Terraform)
-            TFVARS_FILE="../configs/prod.tfvars"
-          else
-            echo "Unknown stage $STAGE"; exit 1
-          fi
-          echo "TFVARS_FILE=$TFVARS_FILE" >> $GITHUB_ENV
-        # This step's working directory is still ./Terraform from the previous step
-        working-directory: ./Terraform
+      if terraform workspace list | grep -q " ${STAGE}$"; then
+        terraform workspace select "$STAGE"
+      else
+        terraform workspace new "$STAGE"
+      fi
+    working-directory: ./Terraform
 
-      - name: Terraform Validate
-        run: terraform validate
-        working-directory: ./Terraform # Ensure this is explicitly set for clarity
+  - name: Select tfvars file for stage
+    run: |
+      export STEP_NAME="Select tfvars file for stage"
+      if [[ "$STAGE" == "dev" ]]; then
+        TFVARS_FILE="../configs/dev.tfvars"
+      elif [[ "$STAGE" == "prod" ]]; then
+        TFVARS_FILE="../configs/prod.tfvars"
+      else
+        echo "Unknown stage $STAGE"; exit 1
+      fi
+      echo "TFVARS_FILE=$TFVARS_FILE" >> $GITHUB_ENV
+    working-directory: ./Terraform
 
-      - name: Terraform Plan
-        env:
-          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        # Reference TFVARS_FILE which is now a relative path from Terraform directory
-        run: terraform plan -var-file=${{ env.TFVARS_FILE }} -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan
-        working-directory: ./Terraform # Ensure this is explicitly set for clarity
+  - name: Terraform Validate
+    run: |
+      export STEP_NAME="Terraform Validate"
+      terraform validate
+    working-directory: ./Terraform
 
-      - name: Simulate Failure for Alert Testing
-        run: |
-           echo "Simulating failure to test alert notifications..."
-           exit 1 
-      
-      - name: Terraform Apply & Capture Output
-        env:
-          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        run: terraform apply -auto-approve tfplan | tee tfplan_output.log
-        working-directory: ./Terraform
+  - name: Terraform Plan
+    env:
+      EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+    run: |
+      export STEP_NAME="Terraform Plan"
+      terraform plan -var-file=${{ env.TFVARS_FILE }} -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan
+    working-directory: ./Terraform
 
-      
-      - name: Get EC2 Public IP/DNS
-        run: |
-          PUBLIC_IP=$(terraform output -raw instance_public_ip)
-          if [ -z "$PUBLIC_IP" ]; then
-            echo "ERROR: No public IP found."; exit 1;
-          fi
-          echo "EC2_PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
-        working-directory: ./Terraform # Ensure this is explicitly set for clarity
-      
-      - name: Setup SSH Key
-        run: |
-          echo "${{ secrets.EC2_PRIVATE_KEY }}" > key.pem
-          chmod 600 key.pem
-      
-      - name: Save Terraform Apply Output to EC2 Log Directory
-        run: |
-          LOG_DIR="/home/ubuntu/runnerlog/${STAGE}"
-          LOG_FILE="${LOG_DIR}/${STAGE}_$(date +%s).log"
-          echo "=== Terraform Apply Log (${STAGE}) ===" > "$LOG_FILE"
-          cat ./Terraform/tfplan_output.log >> "$LOG_FILE"
-        continue-on-error: true 
+  - name: Simulate Failure for Alert Testing
+    run: |
+      export STEP_NAME="Simulate Failure for Alert Testing"
+      echo "Simulating failure to test alert notifications..."
+      exit 1
 
-      
-      - name: Validate Application Health Post-Deployment
-        if: success() && env.EC2_PUBLIC_IP != ''
-        run: |
-            echo "Checking health at http://${{ env.EC2_PUBLIC_IP }}/actuator/health..."
-            for i in {1..40}; do
-              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ env.EC2_PUBLIC_IP }}/actuator/health")
-              if [ "$STATUS" -eq 200 ]; then
-                  echo "App is healthy (HTTP 200)."; exit 0;
-              fi
-              echo "Retry $i: Not ready (HTTP $STATUS). Waiting..."; sleep 30;
-            done
-            echo "App did not become healthy."; exit 1;
+  - name: Terraform Apply & Capture Output
+    env:
+      EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+    run: |
+      export STEP_NAME="Terraform Apply & Capture Output"
+      terraform apply -auto-approve tfplan | tee tfplan_output.log
+    working-directory: ./Terraform
+
+  - name: Get EC2 Public IP/DNS
+    run: |
+      export STEP_NAME="Get EC2 Public IP/DNS"
+      PUBLIC_IP=$(terraform output -raw instance_public_ip)
+      if [ -z "$PUBLIC_IP" ]; then
+        echo "ERROR: No public IP found."; exit 1;
+      fi
+      echo "EC2_PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
+    working-directory: ./Terraform
+
+  - name: Setup SSH Key
+    run: |
+      export STEP_NAME="Setup SSH Key"
+      echo "${{ secrets.EC2_PRIVATE_KEY }}" > key.pem
+      chmod 600 key.pem
+
+  - name: Save Terraform Apply Output to EC2 Log Directory
+    run: |
+      export STEP_NAME="Save Terraform Apply Output to EC2 Log Directory"
+      LOG_DIR="/home/ubuntu/runnerlog/${STAGE}"
+      LOG_FILE="${LOG_DIR}/${STAGE}_$(date +%s).log"
+      echo "=== Terraform Apply Log (${STAGE}) ===" > "$LOG_FILE"
+      cat ./Terraform/tfplan_output.log >> "$LOG_FILE"
+    continue-on-error: true
+
+  - name: Validate Application Health Post-Deployment
+    if: success() && env.EC2_PUBLIC_IP != ''
+    run: |
+      export STEP_NAME="Validate Application Health Post-Deployment"
+      echo "Checking health at http://${{ env.EC2_PUBLIC_IP }}/actuator/health..."
+      for i in {1..40}; do
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ env.EC2_PUBLIC_IP }}/actuator/health")
+        if [ "$STATUS" -eq 200 ]; then
+            echo "App is healthy (HTTP 200)."; exit 0;
+        fi
+        echo "Retry $i: Not ready (HTTP $STATUS). Waiting..."; sleep 30;
+      done
+      echo "App did not become healthy."; exit 1;
