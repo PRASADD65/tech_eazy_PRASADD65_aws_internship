@@ -23,5 +23,3 @@ notify_failure() {
 }
 
 trap notify_failure ERR
-
-chmod +x scripts/notify_sns_failure.sh
