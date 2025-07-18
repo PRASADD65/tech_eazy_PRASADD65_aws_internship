@@ -38,6 +38,7 @@ jobs:
          export STEP_NAME="Source Failure Trap Script"
          chmod +x userscripts/notify_sns_failure.sh
          source userscripts/notify_sns_failure.sh
+         set -e 
 
 
       - name: Build Lambda Deployment Packages
@@ -114,14 +115,6 @@ jobs:
           export STEP_NAME="Terraform Plan"
           terraform plan -var-file=${{ env.TFVARS_FILE }} -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan
         working-directory: ./Terraform
-
-      - name: Source Failure Trap Script
-        run: |
-          chmod +x userscripts/notify_sns_failure.sh
-          # Source the script to enable the trap for subsequent commands in this job
-          source userscripts/notify_sns_failure.sh
-          # Set -e for the entire shell if you want immediate exit on error
-          set -e 
 
       - name: Terraform Apply & Capture Output
         env:
