@@ -30,15 +30,15 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Source Failure Trap Script
-        run: |
-          export STEP_NAME="Source Failure Trap Script"
-          source userscripts/notify_sns_failure.sh
-
       - name: Checkout Repository
         run: |
           export STEP_NAME="Checkout Repository"
           git clone https://github.com/${{ github.repository }} .
+
+      - name: Source Failure Trap Script
+        run: |
+          export STEP_NAME="Source Failure Trap Script"
+          source userscripts/notify_sns_failure.sh
 
       - name: Build Lambda Deployment Packages
         run: |
