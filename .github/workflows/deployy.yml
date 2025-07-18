@@ -1,5 +1,4 @@
 name: Deploy AWS Infrastructure with Terraform
-
 on:
   push:
     tags:
