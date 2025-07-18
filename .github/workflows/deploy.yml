@@ -37,7 +37,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Lambda Deployment Packages
-        run: chmod +x userscripts/build_lambda_zips.sh && ./userscripts/build_lambda_zips.sh | tee -a "$LOG_FILE"
+        run: |
+          chmod +x userscripts/build_lambda_zips.sh
+          ./userscripts/build_lambda_zips.sh > lambda_build.log 2>&1
+          cat lambda_build.log >> "$LOG_FILE"
         working-directory: ./
 
       - name: Setup Terraform CLI
@@ -57,13 +60,15 @@ jobs:
           terraform init \
             -backend-config="bucket=${{ env.S3_BACKEND_BUCKET_NAME }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="key=terraform/${{ env.STAGE }}/terraform.tfstate" | tee -a "$LOG_FILE"
+            -backend-config="key=terraform/${{ env.STAGE }}/terraform.tfstate" > init.log 2>&1
+          cat init.log >> "$LOG_FILE"
 
           if terraform workspace list | grep -q " ${STAGE}$"; then
-            terraform workspace select "$STAGE" | tee -a "$LOG_FILE"
+            terraform workspace select "$STAGE" > workspace.log 2>&1
           else
-            terraform workspace new "$STAGE" | tee -a "$LOG_FILE"
+            terraform workspace new "$STAGE" > workspace.log 2>&1
           fi
+          cat workspace.log >> "$LOG_FILE"
         working-directory: ./Terraform
 
       - name: Select tfvars file for stage
@@ -73,43 +78,54 @@ jobs:
           elif [[ "$STAGE" == "prod" ]]; then
             TFVARS_FILE="../configs/prod.tfvars"
           else
-            echo "Unknown stage $STAGE" | tee -a "$LOG_FILE"
+            echo "Unknown stage $STAGE" > tfvars.log
             exit 1
           fi
           echo "TFVARS_FILE=$TFVARS_FILE" >> $GITHUB_ENV
+          echo "Selected tfvars: $TFVARS_FILE" > tfvars.log
+          cat tfvars.log >> "$LOG_FILE"
         working-directory: ./Terraform
 
       - name: Terraform Validate
-        run: terraform validate | tee -a "$LOG_FILE"
+        run: |
+          terraform validate > validate.log 2>&1
+          cat validate.log >> "$LOG_FILE"
         working-directory: ./Terraform
 
       - name: Terraform Plan
         env:
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        run: terraform plan -var-file=${{ env.TFVARS_FILE }} -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan | tee -a "$LOG_FILE"
+        run: |
+          terraform plan -var-file=${{ env.TFVARS_FILE }} \
+            -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" \
+            -out=tfplan > plan.log 2>&1
+          cat plan.log >> "$LOG_FILE"
         working-directory: ./Terraform
 
       - name: Terraform Apply & Capture Output
         env:
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        run: terraform apply -auto-approve tfplan | tee -a "$LOG_FILE"
+        run: |
+          terraform apply -auto-approve tfplan > apply.log 2>&1
+          cat apply.log >> "$LOG_FILE"
         working-directory: ./Terraform
 
       - name: Get EC2 Public IP/DNS
         run: |
           PUBLIC_IP=$(terraform output -raw instance_public_ip)
           if [ -z "$PUBLIC_IP" ]; then
-            echo "ERROR: No public IP found." | tee -a "$LOG_FILE"
+            echo "ERROR: No public IP found." >> "$LOG_FILE"
             exit 1
           fi
           echo "EC2_PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
+          echo "Public IP: $PUBLIC_IP" >> "$LOG_FILE"
         working-directory: ./Terraform
 
       - name: Setup SSH Key
         run: |
           echo "${{ secrets.EC2_PRIVATE_KEY }}" > key.pem
           chmod 600 key.pem
-          echo "SSH key setup complete." | tee -a "$LOG_FILE"
+          echo "SSH key setup complete." >> "$LOG_FILE"
 
       - name: Save Terraform Apply Output to EC2 Log Directory
         run: |
@@ -120,18 +136,18 @@ jobs:
       - name: Validate Application Health Post-Deployment
         if: success() && env.EC2_PUBLIC_IP != ''
         run: |
-          echo "Checking health at http://${{ env.EC2_PUBLIC_IP }}/actuator/health..." | tee -a "$LOG_FILE"
+          echo "Checking health at http://${{ env.EC2_PUBLIC_IP }}/actuator/health..." >> "$LOG_FILE"
           for i in {1..40}; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ env.EC2_PUBLIC_IP }}/actuator/health")
-            echo "Retry $i: HTTP $STATUS" | tee -a "$LOG_FILE"
+            echo "Retry $i: HTTP $STATUS" >> "$LOG_FILE"
             if [ "$STATUS" -eq 200 ]; then
-              echo "App is healthy." | tee -a "$LOG_FILE"
+              echo "App is healthy." >> "$LOG_FILE"
               exit 0
             fi
             sleep 30
           done
-          echo "App did not become healthy." | tee -a "$LOG_FILE"
+          echo "App did not become healthy." >> "$LOG_FILE"
           exit 1
 
       - name: Final Log Marker
-        run: echo "✅ CI/CD pipeline completed for stage: $STAGE" | tee -a "$LOG_FILE"
+        run: echo "✅ CI/CD pipeline completed for stage: $STAGE" >> "$LOG_FILE"
