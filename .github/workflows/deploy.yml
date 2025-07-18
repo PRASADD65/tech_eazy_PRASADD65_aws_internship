@@ -107,14 +107,18 @@ jobs:
         # Reference TFVARS_FILE which is now a relative path from Terraform directory
         run: terraform plan -var-file=${{ env.TFVARS_FILE }} -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan
         working-directory: ./Terraform # Ensure this is explicitly set for clarity
-
+        
+      - name: Simulate Failure for Alert Testing
+        run: |
+           echo "Simulating failure to test alert notifications..."
+           exit 1 
+      
       - name: Terraform Apply & Capture Output
         env:
           EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         run: terraform apply -auto-approve tfplan | tee tfplan_output.log
         working-directory: ./Terraform
-
-      
+        
       - name: Get EC2 Public IP/DNS
         run: |
           PUBLIC_IP=$(terraform output -raw instance_public_ip)
