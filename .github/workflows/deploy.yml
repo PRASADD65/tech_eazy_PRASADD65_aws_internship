@@ -28,131 +28,218 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 30
+    # The job-level shell with -e can help ensure consistency,
+    # but the trap still needs to be sourced within the specific 'run' block
+    # where the commands are executed.
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Source Failure Trap Script
+      # --- Consolidate all deployment logic into a single 'run' step to ensure trap works ---
+      - name: Execute Full Deployment with Error Trapping
+        env:
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          # Pass EC2_PRIVATE_KEY specifically for this step, as it's used directly here
+          EC2_PRIVATE_KEY: ${{ secrets.EC2_PRIVATE_KEY }}
         run: |
-         export STEP_NAME="Source Failure Trap Script"
-         chmod +x userscripts/notify_sns_failure.sh
-         source userscripts/notify_sns_failure.sh
-         set -e 
+          # --- Setup for error trapping ---
+          chmod +x userscripts/notify_sns_failure.sh
+          source userscripts/notify_sns_failure.sh # Source the trap for this entire run block
+          set -e # Exit immediately on error, triggering the trap
 
+          echo "--- Starting Deployment Workflow ---"
 
-      - name: Build Lambda Deployment Packages
-        run: |
+          # ----------------------------------------------
+          # Build Lambda Deployment Packages
+          # ----------------------------------------------
           export STEP_NAME="Build Lambda Deployment Packages"
+          echo "## Step: ${STEP_NAME}"
           chmod +x userscripts/build_lambda_zips.sh
           ./userscripts/build_lambda_zips.sh
-        working-directory: ./
+          echo "## ${STEP_NAME} Complete"
+          echo ""
 
-      - name: Setup Terraform CLI
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          # ----------------------------------------------
+          # Setup Terraform CLI (using the HashiCorp action's runner logic)
+          # Note: Actions like setup-terraform cannot be directly "run" inside a single script block
+          # unless you replicate their logic. It's usually better to keep them as separate steps
+          # and accept that their internal failures might not trigger your shell trap.
+          # However, the subsequent `terraform` commands *will* trigger the trap if they fail.
+          # For now, I'll keep it as a comment for conceptual clarity.
+          # If a critical failure happens in a GitHub Action (like setup-terraform),
+          # GitHub Actions will mark the step as failed anyway.
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          # ----------------------------------------------
+          # Configure AWS Credentials (using the AWS action's runner logic)
+          # Similar to setup-terraform, this is a separate action.
+          # We are relying on this action to correctly set up credentials for subsequent `aws` and `terraform` commands.
 
-      - name: Determine Deployment Stage and Select/Create Terraform Workspace
-        id: set_stage_and_workspace
-        run: |
+          # ----------------------------------------------
+          # Determine Deployment Stage and Select/Create Terraform Workspace
+          # ----------------------------------------------
           export STEP_NAME="Determine Deployment Stage and Select/Create Terraform Workspace"
+          echo "## Step: ${STEP_NAME}"
+
+          CURRENT_STAGE="" # Initialize to prevent unbound variable issues
           if [[ "${{ github.event_name }}" == "push" ]]; then
             TAG_NAME="${{ github.ref_name }}"
-            if [[ "$TAG_NAME" == "deploy-dev" ]]; then STAGE="dev"
-            elif [[ "$TAG_NAME" == "deploy-prod" ]]; then STAGE="prod"
+            if [[ "$TAG_NAME" == "deploy-dev" ]]; then CURRENT_STAGE="dev"
+            elif [[ "$TAG_NAME" == "deploy-prod" ]]; then CURRENT_STAGE="prod"
             else
-              echo "Unsupported tag name. Exiting."; exit 1;
+              echo "Unsupported tag name. Exiting."; exit 1; # This will trigger the trap
             fi
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            STAGE="${{ github.event.inputs.stage }}"
+            CURRENT_STAGE="${{ github.event.inputs.stage }}"
           fi
 
-          echo "STAGE=$STAGE" >> $GITHUB_ENV
+          # Set STAGE environment variable for the rest of this run block
+          export STAGE="$CURRENT_STAGE"
+          echo "Deployment Stage: $STAGE"
 
-          terraform init \
+          # Terraform init, workspace selection/creation
+          terraform -chdir ./Terraform init \
             -backend-config="bucket=${{ env.S3_BACKEND_BUCKET_NAME }}" \
             -backend-config="region=${{ env.AWS_REGION }}" \
             -backend-config="key=terraform/${STAGE}/terraform.tfstate"
 
-          if terraform workspace list | grep -q " ${STAGE}$"; then
-            terraform workspace select "$STAGE"
+          if terraform -chdir ./Terraform workspace list | grep -q " ${STAGE}$"; then
+            terraform -chdir ./Terraform workspace select "$STAGE"
           else
-            terraform workspace new "$STAGE"
+            terraform -chdir ./Terraform workspace new "$STAGE"
           fi
-        working-directory: ./Terraform
+          echo "## ${STEP_NAME} Complete"
+          echo ""
 
-      - name: Select tfvars file for stage
-        run: |
+          # ----------------------------------------------
+          # Select tfvars file for stage
+          # ----------------------------------------------
           export STEP_NAME="Select tfvars file for stage"
+          echo "## Step: ${STEP_NAME}"
+          TFVARS_FILE_PATH="" # Initialize
+
           if [[ "$STAGE" == "dev" ]]; then
-            TFVARS_FILE="../configs/dev.tfvars"
+            TFVARS_FILE_PATH="../configs/dev.tfvars"
           elif [[ "$STAGE" == "prod" ]]; then
-            TFVARS_FILE="../configs/prod.tfvars"
+            TFVARS_FILE_PATH="../configs/prod.tfvars"
           else
-            echo "Unknown stage $STAGE"; exit 1
+            echo "Unknown stage $STAGE"; exit 1 # This will trigger the trap
           fi
-          echo "TFVARS_FILE=$TFVARS_FILE" >> $GITHUB_ENV
-        working-directory: ./Terraform
+          export TFVARS_FILE="$TFVARS_FILE_PATH" # Make available for subsequent commands
+          echo "Using TFVARS_FILE: $TFVARS_FILE"
+          echo "## ${STEP_NAME} Complete"
+          echo ""
 
-      - name: Terraform Validate
-        run: |
+          # ----------------------------------------------
+          # Terraform Validate
+          # ----------------------------------------------
           export STEP_NAME="Terraform Validate"
-          terraform validate
-        working-directory: ./Terraform
+          echo "## Step: ${STEP_NAME}"
+          terraform -chdir ./Terraform validate
+          echo "## ${STEP_NAME} Complete"
+          echo ""
 
-      - name: Terraform Plan
-        env:
-          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        run: |
+          # ----------------------------------------------
+          # Terraform Plan
+          # ----------------------------------------------
           export STEP_NAME="Terraform Plan"
-          terraform plan -var-file=${{ env.TFVARS_FILE }} -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan
-        working-directory: ./Terraform
+          echo "## Step: ${STEP_NAME}"
+          # Pass EC2_SSH_PRIVATE_KEY directly as a -var for the plan,
+          # as it's an env var for the *entire* run block now.
+          terraform -chdir ./Terraform plan -var-file="${TFVARS_FILE}" -var="ec2_ssh_private_key=${EC2_SSH_PRIVATE_KEY}" -out=tfplan
+          echo "## ${STEP_NAME} Complete"
+          echo ""
 
-      - name: Terraform Apply & Capture Output
-        env:
-          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-        run: |
+          # ----------------------------------------------
+          # Simulate Failure for Alert Testing (for testing purposes)
+          # ----------------------------------------------
+          # Uncomment the 'false' line below to test the notification system
+          # export STEP_NAME="Simulate Failure for Alert Testing"
+          # echo "## Step: ${STEP_NAME}"
+          # echo "Simulating failure to test alert notifications..."
+            false # This will trigger the trap
+          # echo "## ${STEP_NAME} Complete"
+          # echo ""
+
+          # ----------------------------------------------
+          # Terraform Apply & Capture Output
+          # ----------------------------------------------
           export STEP_NAME="Terraform Apply & Capture Output"
-          terraform apply -auto-approve tfplan | tee tfplan_output.log
-        working-directory: ./Terraform
+          echo "## Step: ${STEP_NAME}"
+          terraform -chdir ./Terraform apply -auto-approve tfplan | tee ./Terraform/tfplan_output.log
+          echo "## ${STEP_NAME} Complete"
+          echo ""
 
-      - name: Get EC2 Public IP/DNS
-        run: |
+          # ----------------------------------------------
+          # Get EC2 Public IP/DNS
+          # ----------------------------------------------
           export STEP_NAME="Get EC2 Public IP/DNS"
-          PUBLIC_IP=$(terraform output -raw instance_public_ip)
+          echo "## Step: ${STEP_NAME}"
+          PUBLIC_IP=$(terraform -chdir ./Terraform output -raw instance_public_ip)
           if [ -z "$PUBLIC_IP" ]; then
-            echo "ERROR: No public IP found."; exit 1;
+            echo "ERROR: No public IP found."; exit 1; # This will trigger the trap
           fi
-          echo "EC2_PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
-        working-directory: ./Terraform
+          export EC2_PUBLIC_IP="$PUBLIC_IP" # Make available for subsequent commands
+          echo "EC2_PUBLIC_IP: $EC2_PUBLIC_IP"
+          echo "## ${STEP_NAME} Complete"
+          echo ""
 
-      - name: Setup SSH Key
-        run: |
+          # ----------------------------------------------
+          # Setup SSH Key
+          # ----------------------------------------------
           export STEP_NAME="Setup SSH Key"
-          echo "${{ secrets.EC2_PRIVATE_KEY }}" > key.pem
+          echo "## Step: ${STEP_NAME}"
+          # Use the EC2_PRIVATE_KEY env var set at the top of this run block
+          echo "${EC2_PRIVATE_KEY}" > key.pem
           chmod 600 key.pem
+          echo "## ${STEP_NAME} Complete"
+          echo ""
 
-      - name: Save Terraform Apply Output to EC2 Log Directory
-        run: |
+          # ----------------------------------------------
+          # Save Terraform Apply Output to EC2 Log Directory
+          # ----------------------------------------------
           export STEP_NAME="Save Terraform Apply Output to EC2 Log Directory"
+          echo "## Step: ${STEP_NAME}"
           LOG_DIR="/home/ubuntu/runnerlog/${STAGE}"
+          mkdir -p "$LOG_DIR" # Ensure log directory exists
           LOG_FILE="${LOG_DIR}/${STAGE}_$(date +%s).log"
           echo "=== Terraform Apply Log (${STAGE}) ===" > "$LOG_FILE"
           cat ./Terraform/tfplan_output.log >> "$LOG_FILE"
-        continue-on-error: true
+          # continue-on-error: true logic is gone here, as set -e will exit on error.
+          # If you truly want to ignore errors for this step, you'd need a subshell with `|| true`
+          # but typically if saving logs fails, you want to know.
+          echo "## ${STEP_NAME} Complete"
+          echo ""
 
-      - name: Validate Application Health Post-Deployment
-        if: success() && env.EC2_PUBLIC_IP != ''
-        run: |
-          export STEP_NAME="Validate Application Health Post-Deployment"
-          echo "Checking health at http://${{ env.EC2_PUBLIC_IP }}/actuator/health..."
-          for i in {1..40}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ env.EC2_PUBLIC_IP }}/actuator/health")
+          # ----------------------------------------------
+          # Validate Application Health Post-Deployment
+          # ----------------------------------------------
+          # The if condition needs to be a shell 'if' now, as it's inside a single 'run' block.
+          if [[ "${{ success() }}" == "true" && -n "$EC2_PUBLIC_IP" ]]; then
+            export STEP_NAME="Validate Application Health Post-Deployment"
+            echo "## Step: ${STEP_NAME}"
+            echo "Checking health at http://${EC2_PUBLIC_IP}/actuator/health..."
+            HEALTH_STATUS=""
+            for i in {1..40}; do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${EC2_PUBLIC_IP}/actuator/health")
+              if [ "$STATUS" -eq 200 ]; then
+                echo "Application is healthy! (Status: $STATUS)"
+                HEALTH_STATUS="healthy"
+                break
+              fi
+              echo "Health check failed (status: $STATUS). Retrying in 5 seconds..."
+              sleep 5
+            done
+
+            if [ "$HEALTH_STATUS" != "healthy" ]; then
+              echo "Application health check failed after multiple retries."
+              exit 1 # This will trigger the trap
+            fi
+            echo "## ${STEP_NAME} Complete"
+            echo ""
+          else
+            echo "## Skipping Validate Application Health Post-Deployment (previous step failed or no public IP)"
+            echo ""
+          fi
+
+          echo "--- Deployment Workflow Complete (or failed earlier) ---"
